@@ -56,8 +56,18 @@ You will want to know a few things:
 
 - [x] bayesian allele states
 
+- [ ] bayesian pool size (is n constant for each k-mer)
+
+- [ ] confidence intervals for allele frequencies
+
+- [ ] credible intervals for allele frequencies
+
 - [ ] Fst
 
-- [ ] diversity
+- [ ] Diversity
+
+- [ ] Tajimas D for individual hetmers
 
 - [ ] frequency increment test
+
+- [ ] HWE?
