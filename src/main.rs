@@ -18,12 +18,28 @@ struct Args {
     minimum: usize,
 
     // number of alleles in each hetmer
-    #[arg(short, long, default_value_t = 2)]
+    #[arg(short = 'l', long, default_value_t = 2)]
     alleles: usize,
 
     // kmer count table file name
     #[arg(short, long)]
     output: String,
+
+    // mean k-mer coverage
+    #[arg(short, long)]
+    coverage: f64,
+
+    // pool size
+    #[arg(short, long)]
+    pool: i32,
+
+    // minimum kmer count
+    #[arg(short, long, default_value_t = 1.0)]
+    alpha: f64,
+
+    // minimum kmer count
+    #[arg(short, long, default_value_t = 1.0)]
+    beta: f64,
 }
 
 
@@ -146,7 +162,7 @@ fn write_file(output: Vec<String>, prefix: String, suffix: String) {
 }
 
 // Collect functions into one 
-fn kmers_to_hetmers(input: String, output: String, minimum: usize, alleles: usize){
+fn kmers_to_hetmers(input: String, output: String, minimum: usize, alleles: usize) -> (Vec<std::string::String>, Vec<std::string::String>){
     let kmers = load_kmers(input, minimum);
     println!("{:?}", kmers);
 
@@ -174,12 +190,86 @@ fn kmers_to_hetmers(input: String, output: String, minimum: usize, alleles: usiz
     let hetmers = extract_hetmers(filtered_groups, kmers.0, kmers.1);
     println!("{:?}", hetmers);
 
-    write_file(hetmers.0, output.clone(), "seqs.csv".to_string());
-    write_file(hetmers.1, output, "counts.csv".to_string());
+    write_file(hetmers.0.clone(), output.clone(), "seqs.csv".to_string());
+    write_file(hetmers.1.clone(), output, "counts.csv".to_string());
+
+    return hetmers;
 }
 
-// allele frequencies
-//fn kmers_to_frequencies
+// empirical allele frequencies
+fn counts_to_frequencies(count_pairs: Vec<String>) -> Vec<f64> {
+    println!("Calculating frequencies...");
+    let frequencies = count_pairs.iter()
+        .filter_map(|s| {
+            let parts: Vec<&str> = s.split(',').collect();
+            if parts.len() == 2 {
+                if let (Ok(num1), Ok(num2)) = (parts[0].parse::<f64>(), parts[1].parse::<f64>()) {
+                    let min_num = num1.min(num2);
+                    let max_num = num1.max(num2);
+                    let sum = min_num + max_num;
+                    if sum != 0.0 {
+                        return Some(min_num / sum);
+                    }
+                }
+            }
+        None
+        })
+        .collect();
+    return frequencies;
+}
+
+// bayesian allele states
+fn posterior(x: f64, z: f64, n: i32, c: f64, alpha: f64, beta: f64) -> Vec<f64> {
+    let mut likelihood_times_prior = Vec::new();
+    let mut total_probability = 0.0;
+
+    for i in 1..n {
+        //println!("i is {}", i);
+        let p = i as f64 / n as f64;
+        //println!("p is {}", p);
+        //println!("c is {}", c);
+        let lambdax = (p as f64) * c;
+        //println!("lambdax is {}",lambdax);
+        let lambday = (1.0-p as f64) * c;
+        //println!("lambday is {}",lambday);
+        
+        let num = p.powf(x + alpha - 1.0) * (1.0-p).powf((z - x) + beta - 1.0);
+        let denom = (lambdax.exp() - 1.0) * (lambday.exp() - 1.0);        
+        let value = num/denom;
+        //println!("Numerator is {}",num);
+        //println!("Denominator is {}",denom);
+        //println!("Value is {}",value);
+        likelihood_times_prior.push(value);
+        total_probability += value;
+    }
+        
+    let post: Vec<f64> = likelihood_times_prior.iter().map(|&v| v / total_probability).collect();
+
+    return post;    
+}
+
+fn highest_prob_index(probabilities: Vec<f64>) -> Option<usize> {
+    probabilities.iter().enumerate().max_by(|a, b| a.1.partial_cmp(b.1).unwrap_or(std::cmp::Ordering::Equal)).map(|(index, _)| index)
+}
+
+fn counts_to_bayes_state(count_pairs: Vec<String>, n: i32, c: f64, alpha: f64, beta: f64) -> Vec<usize>{
+    println!("Calculating posterior...");
+    let bayes_states = count_pairs.iter()
+        .filter_map(|s| {
+            let parts: Vec<&str> = s.split(',').collect();
+            if parts.len() == 2 {
+                if let (Ok(num1), Ok(num2)) = (parts[0].parse::<f64>(), parts[1].parse::<f64>()) {
+                    let min_num = num1.min(num2);
+                    let max_num = num1.max(num2);
+                    let z = min_num + max_num;
+                    let post = posterior(min_num,z,n,c,alpha,beta);
+                    return highest_prob_index(post);
+                } else { return Some(0);}
+            } else { return Some(0); }
+        })
+        .collect();
+    return bayes_states;
+}
 
 // fst
 
@@ -236,5 +326,14 @@ fn main() {
     //write_file(hetmers.0, args.output.clone(), "seqs.csv".to_string());
     //write_file(hetmers.1, args.output, "counts.csv".to_string());
 
-    kmers_to_hetmers(args.input, args.output, args.minimum, args.alleles);
+    let hetmers = kmers_to_hetmers(args.input, args.output, args.minimum, args.alleles);
+
+    let empirical_freqs = counts_to_frequencies(hetmers.1.clone());
+    println!("{:?}", empirical_freqs);
+
+    //println!("{:?}", posterior(100.0, 200.0, 50, 100.0, 1.0, 1.0));
+    //println!("{:?}", highest_prob_index(posterior(25.0, 300.0, 50, 300.0, 1.0, 1.0)));
+    
+    let bayes_states = counts_to_bayes_state(hetmers.1, args.pool, args.coverage, args.alpha, args.beta);
+    println!("{:?}", bayes_states);
 }
