@@ -197,9 +197,9 @@ fn kmers_to_hetmers(input: String, output: String, minimum: usize, alleles: usiz
 }
 
 // empirical allele frequencies
-fn counts_to_frequencies(count_pairs: Vec<String>) -> Vec<f64> {
+fn counts_to_frequencies(count_pairs: Vec<String>, output: String) -> Vec<f64> {
     println!("Calculating frequencies...");
-    let frequencies = count_pairs.iter()
+    let frequencies: Vec<_> = count_pairs.iter()
         .filter_map(|s| {
             let parts: Vec<&str> = s.split(',').collect();
             if parts.len() == 2 {
@@ -215,6 +215,10 @@ fn counts_to_frequencies(count_pairs: Vec<String>) -> Vec<f64> {
         None
         })
         .collect();
+
+    // write frequencies to file
+    write_file(frequencies.clone().into_iter().map(|s| s.to_string()).collect(), output, "empirical_freqs.csv".to_string());
+    // done
     return frequencies;
 }
 
@@ -252,9 +256,9 @@ fn highest_prob_index(probabilities: Vec<f64>) -> Option<usize> {
     probabilities.iter().enumerate().max_by(|a, b| a.1.partial_cmp(b.1).unwrap_or(std::cmp::Ordering::Equal)).map(|(index, _)| index)
 }
 
-fn counts_to_bayes_state(count_pairs: Vec<String>, n: i32, c: f64, alpha: f64, beta: f64) -> Vec<usize>{
+fn counts_to_bayes_state(count_pairs: Vec<String>, n: i32, c: f64, alpha: f64, beta: f64, output: String) -> Vec<usize>{
     println!("Calculating posterior...");
-    let bayes_states = count_pairs.iter()
+    let bayes_states: Vec<_> = count_pairs.iter()
         .filter_map(|s| {
             let parts: Vec<&str> = s.split(',').collect();
             if parts.len() == 2 {
@@ -268,6 +272,8 @@ fn counts_to_bayes_state(count_pairs: Vec<String>, n: i32, c: f64, alpha: f64, b
             } else { return Some(0); }
         })
         .collect();
+    // write frequencies to file
+    write_file(bayes_states.clone().into_iter().map(|s| s.to_string()).collect(), output, "bayes_states.csv".to_string());
     return bayes_states;
 }
 
@@ -326,14 +332,14 @@ fn main() {
     //write_file(hetmers.0, args.output.clone(), "seqs.csv".to_string());
     //write_file(hetmers.1, args.output, "counts.csv".to_string());
 
-    let hetmers = kmers_to_hetmers(args.input, args.output, args.minimum, args.alleles);
+    let hetmers = kmers_to_hetmers(args.input, args.output.clone(), args.minimum, args.alleles);
 
-    let empirical_freqs = counts_to_frequencies(hetmers.1.clone());
+    let empirical_freqs = counts_to_frequencies(hetmers.1.clone(), args.output.clone());
     println!("{:?}", empirical_freqs);
 
     //println!("{:?}", posterior(100.0, 200.0, 50, 100.0, 1.0, 1.0));
     //println!("{:?}", highest_prob_index(posterior(25.0, 300.0, 50, 300.0, 1.0, 1.0)));
     
-    let bayes_states = counts_to_bayes_state(hetmers.1, args.pool, args.coverage, args.alpha, args.beta);
+    let bayes_states = counts_to_bayes_state(hetmers.1, args.pool, args.coverage, args.alpha, args.beta, args.output.clone());
     println!("{:?}", bayes_states);
 }
