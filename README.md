@@ -46,7 +46,13 @@ You will want to know a few things:
 
 ### one population
 
+`hetmers --inputs test.tsv --minimums 1 --alleles 2 --outputs yay --coverages 100 --pools 50 --alphas 1 --betas 1`
+
 ### comparing two populations
+
+If you want to perform the same analysis on more than one population, then you can pass vectors to each argument.
+
+`hetmers --inputs test.tsv test2.tsv --minimums 1 1 --alleles 2 --outputs yay yay2 --coverages 100 50 --pools 50 25 --alphas 1 1 --betas 1 1`
 
 ### comparing >2 populations
 
@@ -55,6 +61,8 @@ You will want to know a few things:
 - [x] empirical allele frequencies
 
 - [x] bayesian allele states
+
+- [x] loop over multiple populations separately
 
 - [ ] bayesian pool size (is n constant for each k-mer)
 

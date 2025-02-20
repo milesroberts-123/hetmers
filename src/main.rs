@@ -4,42 +4,43 @@ use std::io::{BufRead, BufReader, Write};
 use clap::Parser; // argument parser
 //use bio::alphabets::dna;
 use sha2::{Digest, Sha256};
+use itertools::izip;
 
 // Structure of input arguments
 #[derive(Parser, Debug)]
 #[command(version, about, long_about = None)]
 struct Args {
     // kmer count table file name
-    #[arg(short, long)]
-    input: String,
+    #[arg(short, long, num_args = 1.., value_delimiter = ' ')]
+    inputs: Vec<String>,
 
     // minimum kmer count
-    #[arg(short, long, default_value_t = 1)]
-    minimum: usize,
+    #[arg(short, long, num_args = 1.., value_delimiter = ' ')]
+    minimums: Vec<usize>,
 
     // number of alleles in each hetmer
     #[arg(short = 'l', long, default_value_t = 2)]
     alleles: usize,
 
     // kmer count table file name
-    #[arg(short, long)]
-    output: String,
+    #[arg(short, long, num_args = 1.., value_delimiter = ' ')]
+    outputs: Vec<String>,
 
     // mean k-mer coverage
-    #[arg(short, long)]
-    coverage: f64,
+    #[arg(short, long, num_args = 1.., value_delimiter = ' ')]
+    coverages: Vec<f64>,
 
     // pool size
-    #[arg(short, long)]
-    pool: i32,
+    #[arg(short, long, num_args = 1.., value_delimiter = ' ')]
+    pools: Vec<i32>,
 
     // minimum kmer count
-    #[arg(short, long, default_value_t = 1.0)]
-    alpha: f64,
+    #[arg(short, long, num_args = 1.., value_delimiter = ' ')]
+    alphas: Vec<f64>,
 
     // minimum kmer count
-    #[arg(short, long, default_value_t = 1.0)]
-    beta: f64,
+    #[arg(short, long, num_args = 1.., value_delimiter = ' ')]
+    betas: Vec<f64>,
 }
 
 
@@ -332,14 +333,26 @@ fn main() {
     //write_file(hetmers.0, args.output.clone(), "seqs.csv".to_string());
     //write_file(hetmers.1, args.output, "counts.csv".to_string());
 
-    let hetmers = kmers_to_hetmers(args.input, args.output.clone(), args.minimum, args.alleles);
+    // loop over individual populations
+    for (input, output, minimum, coverage, pool, alpha, beta) in izip!(args.inputs, args.outputs, args.minimums, args.coverages, args.pools, args.alphas, args.betas) {
+    //for input in args.input.into_iter(){
+        // find hetmers
+        println!("{}", "1");
+        let hetmers = kmers_to_hetmers(input, output.clone(), minimum, args.alleles);
 
-    let empirical_freqs = counts_to_frequencies(hetmers.1.clone(), args.output.clone());
-    println!("{:?}", empirical_freqs);
+        // empirical hetmer frequencies
+        let empirical_freqs = counts_to_frequencies(hetmers.1.clone(), output.clone());
+        println!("{:?}", empirical_freqs);
 
-    //println!("{:?}", posterior(100.0, 200.0, 50, 100.0, 1.0, 1.0));
-    //println!("{:?}", highest_prob_index(posterior(25.0, 300.0, 50, 300.0, 1.0, 1.0)));
+        //println!("{:?}", posterior(100.0, 200.0, 50, 100.0, 1.0, 1.0));
+        //println!("{:?}", highest_prob_index(posterior(25.0, 300.0, 50, 300.0, 1.0, 1.0)));
     
-    let bayes_states = counts_to_bayes_state(hetmers.1, args.pool, args.coverage, args.alpha, args.beta, args.output.clone());
-    println!("{:?}", bayes_states);
+        // bayesian hetmer frequencies
+        let bayes_states = counts_to_bayes_state(hetmers.1, pool, coverage, alpha, beta, output);
+        println!("{:?}", bayes_states);
+    }
+
+   // analyses comparing two populations, or pairs of populations
+
+   // analyses comparing three or more populations
 }
