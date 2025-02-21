@@ -5,17 +5,18 @@ use clap::Parser; // argument parser
 //use bio::alphabets::dna;
 use sha2::{Digest, Sha256};
 use itertools::izip;
+//use std::collections::hash_map::Keys
 
 // Structure of input arguments
 #[derive(Parser, Debug)]
 #[command(version, about, long_about = None)]
 struct Args {
     // kmer count table file name
-    #[arg(short, long, num_args = 1.., value_delimiter = ' ')]
+    #[arg(short, long, num_args = 1.., value_delimiter = ' ', required = true)]
     inputs: Vec<String>,
 
     // minimum kmer count
-    #[arg(short, long, num_args = 1.., value_delimiter = ' ')]
+    #[arg(short, long, num_args = 1.., value_delimiter = ' ', required = true)]
     minimums: Vec<usize>,
 
     // number of alleles in each hetmer
@@ -23,29 +24,29 @@ struct Args {
     alleles: usize,
 
     // kmer count table file name
-    #[arg(short, long, num_args = 1.., value_delimiter = ' ')]
+    #[arg(short, long, num_args = 1.., value_delimiter = ' ', required = true)]
     outputs: Vec<String>,
 
     // mean k-mer coverage
-    #[arg(short, long, num_args = 1.., value_delimiter = ' ')]
+    #[arg(short, long, num_args = 1.., value_delimiter = ' ', required = true)]
     coverages: Vec<f64>,
 
     // pool size
-    #[arg(short, long, num_args = 1.., value_delimiter = ' ')]
+    #[arg(short, long, num_args = 1.., value_delimiter = ' ', required = true)]
     pools: Vec<i32>,
 
     // minimum kmer count
-    #[arg(short, long, num_args = 1.., value_delimiter = ' ')]
+    #[arg(short, long, num_args = 1.., value_delimiter = ' ', required = true)]
     alphas: Vec<f64>,
 
     // minimum kmer count
-    #[arg(short, long, num_args = 1.., value_delimiter = ' ')]
+    #[arg(short, long, num_args = 1.., value_delimiter = ' ', required = true)]
     betas: Vec<f64>,
 }
 
 
 // Function to read in kmer count table
-fn load_kmers(input: String, minimum: usize) -> (Vec<String>, Vec<usize>) {
+fn load_kmers(input: &String, minimum: usize) -> (Vec<String>, Vec<usize>) {
     println!("Loading k-mer count file {}...", input);
     let file = File::open(input).expect("Unable to open file");
     let reader = BufReader::new(file);
@@ -143,7 +144,7 @@ fn filter_groups(input: HashMap<u64, Vec<usize>>, alleles: usize) -> HashMap<u64
 
 
 // extract hetmer sequences and counts based on hashes
-fn extract_hetmers(hashdict: HashMap<u64, Vec<usize>>, seqs: Vec<String>, counts: Vec<usize>) -> (Vec<String>, Vec<String>) {
+fn extract_hetmers(hashdict: HashMap<u64, Vec<usize>>, seqs: Vec<String>, counts: Vec<usize>) -> (Vec<String>, Vec<String>, Vec<u64>) {
     println!("Extracting counts and sequences...");
     let hetmer_seqs: Vec<String> = hashdict.values()
         .map(|indices| indices.iter().map(|&i| seqs[i].clone()).collect::<Vec<String>>().join(","))
@@ -152,7 +153,7 @@ fn extract_hetmers(hashdict: HashMap<u64, Vec<usize>>, seqs: Vec<String>, counts
         .map(|indices| indices.iter().map(|&i| counts[i].to_string()).collect::<Vec<String>>().join(","))
         .collect();
 
-    return (hetmer_seqs, hetmer_counts);
+    return (hetmer_seqs, hetmer_counts, hashdict.into_iter().map(|(id, _score)| id).collect());
 }
 
 // write vector to file
@@ -163,7 +164,7 @@ fn write_file(output: Vec<String>, prefix: String, suffix: String) {
 }
 
 // Collect functions into one 
-fn kmers_to_hetmers(input: String, output: String, minimum: usize, alleles: usize) -> (Vec<std::string::String>, Vec<std::string::String>){
+fn kmers_to_hetmers(input: &String, output: String, minimum: usize, alleles: usize) -> (Vec<std::string::String>, Vec<std::string::String>, Vec<u64>){
     let kmers = load_kmers(input, minimum);
     println!("{:?}", kmers);
 
@@ -287,54 +288,8 @@ fn main() {
     //let args: Vec<String> = env::args().collect();
     let args = Args::parse(); 
 
-    //for _ in 0..args.count {
-    //    println!("Hello {}!", args.name);
-    //}
-
-    //let input = &args[1];  // Input file path
-    //let alleles = &args[2]; // How many alleles to have for hetmers
-    //let minimum = &args[2]; // Minimum k-mer count
-    //let output_prefix = &args[3];  // Output file prefix
-
-    //println!("Input file is {input}");
-    //println!("allele type is {alleles}");
-    //println!("Minimum hetmer count is {minimum}");
-    //println!("Output prefix is {output_prefix}");
-
-    //let minimum = minimum.parse::<usize>().unwrap();
-    //let kmers = load_kmers(args.input, args.minimum);
-
-    //println!("{:?}", kmers);
-
-    //let borders = extract_border(kmers.0.clone());
-    //println!("{:?}", borders);
-
-    //let revborders = rev_comp(borders.clone());
-    //println!("{:?}", revborders);
-
-    //let hashbord = hash_seqs(borders);
-    //println!("{:?}", hashbord);
-
-    //let hashrevbord = hash_seqs(revborders);
-    //println!("{:?}", hashrevbord);
-
-    //let min_hashes = min_hash(hashbord, hashrevbord);
-    //println!("{:?}", min_hashes);
-
-    //let grouped_hashes = group_hashes(min_hashes);
-    //println!("{:?}", grouped_hashes);
-
-    //let filtered_groups = filter_groups(grouped_hashes, args.alleles);
-    //println!("{:?}", filtered_groups);
-
-    //let hetmers = extract_hetmers(filtered_groups, kmers.0, kmers.1);
-    //println!("{:?}", hetmers);
-
-    //write_file(hetmers.0, args.output.clone(), "seqs.csv".to_string());
-    //write_file(hetmers.1, args.output, "counts.csv".to_string());
-
     // loop over individual populations
-    for (input, output, minimum, coverage, pool, alpha, beta) in izip!(args.inputs, args.outputs, args.minimums, args.coverages, args.pools, args.alphas, args.betas) {
+    for (input, output, minimum, coverage, pool, alpha, beta) in izip!(&args.inputs, args.outputs, args.minimums, args.coverages, args.pools, args.alphas, args.betas) {
     //for input in args.input.into_iter(){
         // find hetmers
         println!("{}", "1");
@@ -353,6 +308,24 @@ fn main() {
     }
 
    // analyses comparing two populations, or pairs of populations
+   let num_pops = args.inputs.len();
+
+   if num_pops > 1{
+       for i in 0..(num_pops-1){
+           for j in (i+1)..num_pops{
+               println!("{:?}", &args.inputs[i]);
+               println!("{:?}", &args.inputs[j]);
+               // get hetmers that are specific to each population
+
+               // find hetmers shared between the two populations (intersection of hash vector)
+
+               // calculate pairwise comparision
+           }
+       }
+   }
 
    // analyses comparing three or more populations
+   if num_pops > 2{
+       println!("{}", ":D");
+   }
 }

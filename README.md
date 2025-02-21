@@ -2,6 +2,8 @@
 
 Rust script for working with heterozygous k-mers in pooled sequencing data for population genetics
 
+# Table of Contents
+
 # Usage
 
 ```
@@ -20,13 +22,13 @@ Options:
   -V, --version              Print version
 ```
 
-# How to use
+# Tutorial
 
 ## 1. get pooled sequening data
 
 ### create pseudo pools
 
-If you have sequencing data for individuals, you can creat pseudo-pooled sequencing data by downsampling every individual to the same sequencing depth and then concatenating the downsampled fastq files.
+If you have sequencing data for individuals, you can create pseudo-pooled sequencing data by downsampling every individual to the same sequencing depth and then concatenating the downsampled fastq files.
 
 ## 2. count k-mers
 
@@ -56,6 +58,14 @@ If you want to perform the same analysis on more than one population, then you c
 
 ### comparing >2 populations
 
+# Examples
+
+## Find putative SNPs in one pool
+
+## Find putative SNPs specific to one pool (not shared with other pools)
+
+## Measure Fst between two pools
+
 # To-do
 
 - [x] empirical allele frequencies
@@ -71,6 +81,8 @@ If you want to perform the same analysis on more than one population, then you c
 - [ ] credible intervals for allele frequencies
 
 - [ ] Fst
+
+- [ ] dxy
 
 - [ ] Diversity
 
