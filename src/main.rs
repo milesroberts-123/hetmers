@@ -11,35 +11,39 @@ use itertools::izip;
 #[derive(Parser, Debug)]
 #[command(version, about, long_about = None)]
 struct Args {
-    // kmer count table file name
+    /// kmer count table file name
     #[arg(short, long, num_args = 1.., value_delimiter = ' ', required = true)]
     inputs: Vec<String>,
 
-    // minimum kmer count
-    #[arg(short, long, num_args = 1.., value_delimiter = ' ', required = true)]
-    minimums: Vec<usize>,
-
-    // number of alleles in each hetmer
-    #[arg(short = 'l', long, default_value_t = 2)]
-    alleles: usize,
-
-    // kmer count table file name
+    /// prefix for output files
     #[arg(short, long, num_args = 1.., value_delimiter = ' ', required = true)]
     outputs: Vec<String>,
 
-    // mean k-mer coverage
+    /// analysis type to run
+    #[arg(short = 'y', long, num_args = 1.., value_delimiter = ' ', required = true, value_parser = clap::builder::PossibleValuesParser::new(["hetmers", "emp_freq", "bayes_freq", "fst", "dxy", "fit"]))]
+    analyses: Vec<String>,
+
+    /// minimum k-mer count
+    #[arg(short, long, num_args = 1.., value_delimiter = ' ', required = true)]
+    minimums: Vec<usize>,
+
+    /// number of alleles in each hetmer
+    #[arg(short = 'l', long, default_value_t = 2)]
+    alleles: usize,
+
+    /// mean k-mer coverage
     #[arg(short, long, num_args = 1.., value_delimiter = ' ', required = true)]
     coverages: Vec<f64>,
 
-    // pool size
+    /// pool size
     #[arg(short, long, num_args = 1.., value_delimiter = ' ', required = true)]
     pools: Vec<i32>,
 
-    // minimum kmer count
+    /// shape parameter for prior distribution (bayes_freq analysis)
     #[arg(short, long, num_args = 1.., value_delimiter = ' ', required = true)]
     alphas: Vec<f64>,
 
-    // minimum kmer count
+    /// shape parameter for prior distribution (bayes_freq_analysis)
     #[arg(short, long, num_args = 1.., value_delimiter = ' ', required = true)]
     betas: Vec<f64>,
 }
@@ -287,6 +291,16 @@ fn counts_to_bayes_state(count_pairs: Vec<String>, n: i32, c: f64, alpha: f64, b
 fn main() {
     //let args: Vec<String> = env::args().collect();
     let args = Args::parse(); 
+
+    // check that analyses specified in input are supported
+    //let analysis_choices = vec!["hetmers", "empirical_frequencies", "bayesian_frequencies", "fst", "dxy"];
+    //if analysis_choices.iter().all(|e| args.analyses.contains(e)){
+    
+    //} else {
+    //    panic!("Unsupported analysis specified");
+    //}
+
+    println!("{:?}", args.analyses);
 
     // loop over individual populations
     for (input, output, minimum, coverage, pool, alpha, beta) in izip!(&args.inputs, args.outputs, args.minimums, args.coverages, args.pools, args.alphas, args.betas) {

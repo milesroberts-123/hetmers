@@ -7,19 +7,20 @@ Rust script for working with heterozygous k-mers in pooled sequencing data for p
 # Usage
 
 ```
-Usage: hetmers [OPTIONS] --input <INPUT> --output <OUTPUT> --coverage <COVERAGE> --pool <POOL>
+Usage: hetmers [OPTIONS] --inputs <INPUTS>... --outputs <OUTPUTS>... --analyses <ANALYSES>... --minimums <MINIMUMS>... --coverages <COVERAGES>... --pools <POOLS>... --alphas <ALPHAS>... --betas <BETAS>...
 
 Options:
-  -i, --input <INPUT>
-  -m, --minimum <MINIMUM>    [default: 1]
-  -l, --alleles <ALLELES>    [default: 2]
-  -o, --output <OUTPUT>
-  -c, --coverage <COVERAGE>
-  -p, --pool <POOL>
-  -a, --alpha <ALPHA>        [default: 1]
-  -b, --beta <BETA>          [default: 1]
-  -h, --help                 Print help
-  -V, --version              Print version
+  -i, --inputs <INPUTS>...        kmer count table file name
+  -o, --outputs <OUTPUTS>...      prefix for output files
+  -y, --analyses <ANALYSES>...    analysis type to run [possible values: hetmers, emp_freq, bayes_freq, fst, dxy, fit]
+  -m, --minimums <MINIMUMS>...    minimum k-mer count
+  -l, --alleles <ALLELES>         number of alleles in each hetmer [default: 2]
+  -c, --coverages <COVERAGES>...  mean k-mer coverage
+  -p, --pools <POOLS>...          pool size
+  -a, --alphas <ALPHAS>...        shape parameter for prior distribution (bayes_freq analysis)
+  -b, --betas <BETAS>...          shape parameter for prior distribution (bayes_freq_analysis)
+  -h, --help                      Print help
+  -V, --version                   Print version
 ```
 
 # Tutorial
