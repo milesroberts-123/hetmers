@@ -284,7 +284,53 @@ fn counts_to_bayes_state(count_pairs: Vec<String>, n: i32, c: f64, alpha: f64, b
 }
 
 // fst
+fn shared_hetmers(map1: &HashMap<u64, Vec<usize>>, map2: &HashMap<u64, Vec<usize>>) -> HashMap<u64, Vec<usize>>{
+    println!("Find hetmers shared between two maps...");
+    let output = map1.iter()
+        .filter(|(k, _)| map2.contains_key(k))
+        .map(|(k, v)| (*k, v.clone()))
+        .collect();
 
+    return output;
+}
+
+fn population_specific_hetmers(map1: &HashMap<u64, Vec<usize>>, map2: &HashMap<u64, Vec<usize>>) -> HashMap<u64, Vec<usize>>{
+    println!("Find hetmers specific to one map...");
+    let output = map1.iter()
+        .filter(|(k, _)| !map2.contains_key(k))
+        .map(|(k, v)| (*k, v.clone()))
+        .collect();
+
+    return output;
+}
+
+fn kmers_to_hashmap(input: &String, minimum: &usize, alleles: &usize) -> HashMap<u64, Vec<usize>>{
+    let kmers = load_kmers(input, *minimum);
+    println!("{:?}", kmers);
+
+    let borders = extract_border(kmers.0.clone());
+    println!("{:?}", borders);
+
+    let revborders = rev_comp(borders.clone());
+    println!("{:?}", revborders);
+
+    let hashbord = hash_seqs(borders);
+    println!("{:?}", hashbord);
+
+    let hashrevbord = hash_seqs(revborders);
+    println!("{:?}", hashrevbord);
+
+    let min_hashes = min_hash(hashbord, hashrevbord);
+    println!("{:?}", min_hashes);
+
+    let grouped_hashes = group_hashes(min_hashes);
+    println!("{:?}", grouped_hashes);
+
+    let filtered_groups = filter_groups(grouped_hashes, *alleles);
+    println!("{:?}", filtered_groups);
+   
+    return filtered_groups;
+}
 // frequency increment test
 
 // mix it all together! :D
@@ -302,12 +348,13 @@ fn main() {
 
     println!("{:?}", args.analyses);
 
+    if args.analyses.contains(&"hetmers".to_string()) { 
     // loop over individual populations
-    for (input, output, minimum, coverage, pool, alpha, beta) in izip!(&args.inputs, args.outputs, args.minimums, args.coverages, args.pools, args.alphas, args.betas) {
+    for (input, output, minimum, coverage, pool, alpha, beta) in izip!(&args.inputs, args.outputs, &args.minimums, args.coverages, args.pools, args.alphas, args.betas) {
     //for input in args.input.into_iter(){
         // find hetmers
         println!("{}", "1");
-        let hetmers = kmers_to_hetmers(input, output.clone(), minimum, args.alleles);
+        let hetmers = kmers_to_hetmers(input, output.clone(), *minimum, args.alleles);
 
         // empirical hetmer frequencies
         let empirical_freqs = counts_to_frequencies(hetmers.1.clone(), output.clone());
@@ -320,22 +367,31 @@ fn main() {
         let bayes_states = counts_to_bayes_state(hetmers.1, pool, coverage, alpha, beta, output);
         println!("{:?}", bayes_states);
     }
+    }
 
    // analyses comparing two populations, or pairs of populations
    let num_pops = args.inputs.len();
 
-   if num_pops > 1{
-       for i in 0..(num_pops-1){
-           for j in (i+1)..num_pops{
-               println!("{:?}", &args.inputs[i]);
-               println!("{:?}", &args.inputs[j]);
+   if (num_pops == 2) && args.analyses.contains(&"fst".to_string()){
+       //for i in 0..(num_pops-1){
+       //    for j in (i+1)..num_pops{
+               println!("{:?}", &args.inputs[0]);
+               println!("{:?}", &args.inputs[1]);
                // get hetmers that are specific to each population
+               let map1 = kmers_to_hashmap(&args.inputs[0], &args.minimums[0], &args.alleles);
+               let map2 = kmers_to_hashmap(&args.inputs[1], &args.minimums[1], &args.alleles);
 
                // find hetmers shared between the two populations (intersection of hash vector)
+               let hetmers_in_common = shared_hetmers(&map1,&map2);
+               println!("{:?}", hetmers_in_common.keys());
+               let map1_specific_hetmers = population_specific_hetmers(&map1,&map2);
+               println!("{:?}", map1_specific_hetmers);
+               let map2_specific_hetmers = population_specific_hetmers(&map2,&map1);
+               println!("{:?}", map2_specific_hetmers);
 
                // calculate pairwise comparision
-           }
-       }
+           //}
+       //}
    }
 
    // analyses comparing three or more populations

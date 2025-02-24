@@ -47,17 +47,23 @@ You will want to know a few things:
 
 * average k-mer coverage ((L-k+1)/L)*(N*L/(G))
 
-### one population
+### Analysis of 1 population
 
-`hetmers --inputs test.tsv --minimums 1 --alleles 2 --outputs yay --coverages 100 --pools 50 --alphas 1 --betas 1`
+`hetmers --inputs test.tsv --minimums 1 --alleles 2 --outputs yay --coverages 100 --pools 50 --alphas 1 --betas 1 --analyses hetmers`
 
-### comparing two populations
+### Analysis of 2 populations
+
+#### Finding hetmers shared between two populations
+
+#### Finding hetmers specific to one population
+
+#### Fst
 
 If you want to perform the same analysis on more than one population, then you can pass vectors to each argument.
 
-`hetmers --inputs test.tsv test2.tsv --minimums 1 1 --alleles 2 --outputs yay yay2 --coverages 100 50 --pools 50 25 --alphas 1 1 --betas 1 1`
+`hetmers --inputs test.tsv test2.tsv --minimums 1 1 --alleles 2 --outputs yay yay2 --coverages 100 50 --pools 50 25 --alphas 1 1 --betas 1 1 --analyses fst`
 
-### comparing >2 populations
+### Analysis of >2 populations
 
 # Examples
 
@@ -65,7 +71,7 @@ If you want to perform the same analysis on more than one population, then you c
 
 ## Find putative SNPs specific to one pool (not shared with other pools)
 
-## Measure Fst between two pools
+## Measure Fst for hetmers shared between two pools
 
 # To-do
 
