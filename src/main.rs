@@ -20,8 +20,8 @@ struct Args {
     outputs: Vec<String>,
 
     /// analysis type to run
-    #[arg(short = 'y', long, num_args = 1.., value_delimiter = ' ', required = true, value_parser = clap::builder::PossibleValuesParser::new(["hetmers", "emp_freq", "bayes_freq", "fst", "dxy", "fit"]))]
-    analyses: Vec<String>,
+    //#[arg(short = 'y', long, num_args = 1.., value_delimiter = ' ', required = true, value_parser = clap::builder::PossibleValuesParser::new(["hetmers", "emp_freq", "bayes_freq", "fst", "dxy", "fit"]))]
+    //analyses: Vec<String>,
 
     /// minimum k-mer count
     #[arg(short, long, num_args = 1.., value_delimiter = ' ', required = true)]
@@ -161,14 +161,14 @@ fn extract_hetmers(hashdict: HashMap<u64, Vec<usize>>, seqs: Vec<String>, counts
 }
 
 // write vector to file
-fn write_file(output: Vec<String>, prefix: String, suffix: String) {
+fn write_file(output: Vec<String>, prefix: &String, suffix: &str) {
     println!("Saving results...");
     let mut file = File::create(format!("{}_{}", prefix, suffix)).expect("Unable to create file");
     writeln!(file, "{}", output.join("\n")).expect("Unable to write to file");
 }
 
 // Collect functions into one 
-fn kmers_to_hetmers(input: &String, output: String, minimum: usize, alleles: usize) -> (Vec<std::string::String>, Vec<std::string::String>, Vec<u64>){
+fn kmers_to_hetmers(input: &String, output: &String, minimum: usize, alleles: usize, pool: i32, coverage: f64, alpha: f64, beta: f64){
     let kmers = load_kmers(input, minimum);
     //println!("{:?}", kmers);
 
@@ -196,15 +196,24 @@ fn kmers_to_hetmers(input: &String, output: String, minimum: usize, alleles: usi
     let hetmers = extract_hetmers(filtered_groups, kmers.0, kmers.1);
     //println!("{:?}", hetmers);
 
-    write_file(hetmers.0.clone(), output.clone(), "seqs.csv".to_string());
-    write_file(hetmers.1.clone(), output.clone(), "counts.csv".to_string());
-    write_file(hetmers.2.clone().iter().map(|num| num.to_string()).collect(), output, "hashes.csv".to_string());
+    // empirical frequencies
+    let empirical_frequencies = counts_to_frequencies(hetmers.1.clone());
 
-    return hetmers;
+    // bayesian allele states
+    let bayes_states = counts_to_bayes_state(hetmers.1.clone(), pool, coverage, alpha, beta);
+
+    // write output files
+    write_file(hetmers.0, output, "seqs.csv");
+    write_file(hetmers.1, output, "counts.csv");
+    write_file(hetmers.2.iter().map(|num| num.to_string()).collect(), output, "hashes.csv");
+    write_file(bayes_states.into_iter().map(|s| s.to_string()).collect(), output, "bayes_states.csv");
+    write_file(empirical_frequencies, output, "empirical_freqs.csv");
+
+    //return hetmers;
 }
 
 // empirical allele frequencies
-fn counts_to_frequencies(count_pairs: Vec<String>, output: String) -> Vec<String> {
+fn counts_to_frequencies(count_pairs: Vec<String>) -> Vec<String> {
     println!("Calculating frequencies...");
     let frequencies: Vec<_> = count_pairs.iter()
         .filter_map(|s| {
@@ -225,7 +234,7 @@ fn counts_to_frequencies(count_pairs: Vec<String>, output: String) -> Vec<String
 
     // write frequencies to file
     let freq_strings: Vec<_> = frequencies.clone().into_iter().map(|s| s.to_string()).collect();
-    write_file(freq_strings.clone(), output, "empirical_freqs.csv".to_string());
+    //write_file(freq_strings.clone(), output, "empirical_freqs.csv".to_string());
     // done
     return freq_strings;
 }
@@ -264,7 +273,7 @@ fn highest_prob_index(probabilities: Vec<f64>) -> Option<usize> {
     probabilities.iter().enumerate().max_by(|a, b| a.1.partial_cmp(b.1).unwrap_or(std::cmp::Ordering::Equal)).map(|(index, _)| index)
 }
 
-fn counts_to_bayes_state(count_pairs: Vec<String>, n: i32, c: f64, alpha: f64, beta: f64, output: String) -> Vec<usize>{
+fn counts_to_bayes_state(count_pairs: Vec<String>, n: i32, c: f64, alpha: f64, beta: f64) -> Vec<usize>{
     println!("Calculating posterior...");
     let bayes_states: Vec<_> = count_pairs.iter()
         .filter_map(|s| {
@@ -281,29 +290,27 @@ fn counts_to_bayes_state(count_pairs: Vec<String>, n: i32, c: f64, alpha: f64, b
         })
         .collect();
     // write frequencies to file
-    write_file(bayes_states.clone().into_iter().map(|s| s.to_string()).collect(), output, "bayes_states.csv".to_string());
+    //write_file(bayes_states.clone().into_iter().map(|s| s.to_string()).collect(), output, "bayes_states.csv".to_string());
     return bayes_states;
 }
 
 // fst
-fn shared_hetmers(map1: Vec<u64>, map2: Vec<u64>) -> Vec<u64>{
-    println!("Find hetmers shared between two maps...");
-    let output = map1.into_iter()
-        .filter(|k| map2.contains(k))
-        .collect();
+//fn shared_hetmers(map1: Vec<u64>, map2: Vec<u64>) -> Vec<u64>{
+//    println!("Find hetmers shared between two maps...");
+//    let output = map1.into_iter()
+//        .filter(|k| map2.contains(k))
+//        .collect();
+//    return output;
+//}
 
-    return output;
-}
-
-fn population_specific_hetmers(map1: &HashMap<u64, Vec<usize>>, map2: &HashMap<u64, Vec<usize>>) -> HashMap<u64, Vec<usize>>{
-    println!("Find hetmers specific to one map...");
-    let output = map1.iter()
-        .filter(|(k, _)| !map2.contains_key(k))
-        .map(|(k, v)| (*k, v.clone()))
-        .collect();
-
-    return output;
-}
+//fn population_specific_hetmers(map1: &HashMap<u64, Vec<usize>>, map2: &HashMap<u64, Vec<usize>>) -> HashMap<u64, Vec<usize>>{
+//    println!("Find hetmers specific to one map...");
+//    let output = map1.iter()
+//        .filter(|(k, _)| !map2.contains_key(k))
+//        .map(|(k, v)| (*k, v.clone()))
+//        .collect();
+//    return output;
+//}
 
 // fn kmers_to_hetmers
 
@@ -351,9 +358,17 @@ mod tests {
     fn a_few_freqs(){
         // Vec<String>, output: String
         let count_pairs = vec!["5,120".to_string(), "1,9".to_string(), "20,140".to_string(), "22,22".to_string()];
-        let result = counts_to_frequencies(count_pairs, "test".to_string());
+        let result = counts_to_frequencies(count_pairs);
         let expected = vec!["0.04".to_string(), "0.1".to_string(), "0.125".to_string(), "0.5".to_string()];
         assert_eq!(result, expected);
+    }
+
+    #[test]
+    fn find_highest_prob(){
+        let post: Vec<f64> = vec![0.01, 0.05, 0.001, 0.111, 0.009, 0.04, 0.0000005];
+        let result = highest_prob_index(post);
+        let expected = 3;
+        assert_eq!(result, Some(expected));
     }
 }
 
@@ -367,15 +382,15 @@ fn main() {
     for (input, output, minimum, coverage, pool, alpha, beta) in izip!(&args.inputs, &args.outputs, &args.minimums, args.coverages, args.pools, args.alphas, args.betas) {
         // find hetmers
         //println!("{}", "1");
-        let hetmers = kmers_to_hetmers(input, output.clone(), *minimum, args.alleles);
+        kmers_to_hetmers(input, output, *minimum, args.alleles, pool, coverage, alpha, beta);
 
         // empirical hetmer frequencies
-        let empirical_freqs = counts_to_frequencies(hetmers.1.clone(), output.clone());
+        //let empirical_freqs = counts_to_frequencies(hetmers.1.clone(), output.clone());
         //println!("{:?}", empirical_freqs);
     
         // bayesian hetmer frequencies
         //if args.analyses.contains(&"bayes".to_string()) { 
-        let bayes_states = counts_to_bayes_state(hetmers.1, pool, coverage, alpha, beta, output.to_string());
+        //let bayes_states = counts_to_bayes_state(hetmers.1, pool, coverage, alpha, beta, output.to_string());
         //}
         //println!("{:?}", bayes_states);
     }
