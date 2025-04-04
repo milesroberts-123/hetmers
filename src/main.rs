@@ -204,7 +204,7 @@ fn kmers_to_hetmers(input: &String, output: String, minimum: usize, alleles: usi
 }
 
 // empirical allele frequencies
-fn counts_to_frequencies(count_pairs: Vec<String>, output: String) -> Vec<f64> {
+fn counts_to_frequencies(count_pairs: Vec<String>, output: String) -> Vec<String> {
     println!("Calculating frequencies...");
     let frequencies: Vec<_> = count_pairs.iter()
         .filter_map(|s| {
@@ -224,9 +224,10 @@ fn counts_to_frequencies(count_pairs: Vec<String>, output: String) -> Vec<f64> {
         .collect();
 
     // write frequencies to file
-    write_file(frequencies.clone().into_iter().map(|s| s.to_string()).collect(), output, "empirical_freqs.csv".to_string());
+    let freq_strings: Vec<_> = frequencies.clone().into_iter().map(|s| s.to_string()).collect();
+    write_file(freq_strings.clone(), output, "empirical_freqs.csv".to_string());
     // done
-    return frequencies;
+    return freq_strings;
 }
 
 // bayesian allele states
@@ -346,6 +347,14 @@ mod tests {
         assert_eq!(result, expected);
     }
 
+    #[test]
+    fn a_few_freqs(){
+        // Vec<String>, output: String
+        let count_pairs = vec!["5,120".to_string(), "1,9".to_string(), "20,140".to_string(), "22,22".to_string()];
+        let result = counts_to_frequencies(count_pairs, "test".to_string());
+        let expected = vec!["0.04".to_string(), "0.1".to_string(), "0.125".to_string(), "0.5".to_string()];
+        assert_eq!(result, expected);
+    }
 }
 
 // mix it all together! :D
