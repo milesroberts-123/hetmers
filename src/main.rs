@@ -6,6 +6,8 @@ use clap::Parser; // argument parser
 use sha2::{Digest, Sha256};
 use itertools::izip;
 //use std::collections::hash_map::Keys
+use statrs::function::gamma::gamma;
+use std::f64;
 
 // Structure of input arguments
 #[derive(Parser, Debug)]
@@ -167,6 +169,137 @@ fn write_file(output: Vec<String>, prefix: &String, suffix: &str) {
     writeln!(file, "{}", output.join("\n")).expect("Unable to write to file");
 }
 
+// empirical allele frequencies
+fn counts_to_frequencies(count_pairs: Vec<String>) -> Vec<String> {
+    println!("Calculating frequencies...");
+    let frequencies: Vec<_> = count_pairs.iter()
+        .filter_map(|s| {
+            let parts: Vec<&str> = s.split(',').collect();
+            if parts.len() == 2 {
+                if let (Ok(num1), Ok(num2)) = (parts[0].parse::<f64>(), parts[1].parse::<f64>()) {
+                    let min_num = num1.min(num2);
+                    let max_num = num1.max(num2);
+                    let sum = min_num + max_num;
+                    if sum != 0.0 {
+                        return Some(min_num / sum);
+                    }
+                }
+            }
+        None
+        })
+        .collect();
+
+    // write frequencies to file
+    let freq_strings: Vec<_> = frequencies.clone().into_iter().map(|s| s.to_string()).collect();
+    //write_file(freq_strings.clone(), output, "empirical_freqs.csv".to_string());
+    // done
+    return freq_strings;
+}
+
+// Compute truncation constant
+fn truncation_constant(c: usize, lambda: f64) -> f64 {
+    let sum: f64 = (0..c)
+        .map(|x| {
+            let numerator = (-lambda).exp() * lambda.powi(x as i32);
+            let denominator = gamma((x + 1) as f64); // factorial(x)
+            numerator / denominator
+        })
+        .sum();
+
+    1.0 - sum
+}
+
+/// Compute posterior where the minor k-mer count is variable
+fn posterior_min_kmer_count(x: f64, z: f64, n: i32, cov: f64, c: usize, alpha: f64, beta: f64) -> usize {
+    let mut likelihood_times_prior = Vec::new();
+    let mut total_probability = 0.0;
+
+    for i in 1..n {
+        let p = i as f64 / n as f64;
+        let lambda_x = (i as f64) * (cov as f64);
+        let lambda_y = ((n - i) as f64) * (cov as f64);
+
+        let tx = truncation_constant(c, lambda_x);
+        let ty = truncation_constant(c, lambda_y);
+
+        let likelihood = p.powf(x as f64 + alpha - 1.0) * (1.0 - p).powf((z - x) as f64 + beta - 1.0);
+        let likelihood_truncated = likelihood / (tx * ty);
+        likelihood_times_prior.push(likelihood_truncated);
+        total_probability += likelihood;
+    }
+
+    let posterior: Vec<f64> = likelihood_times_prior
+        .iter()
+        .map(|val| val / total_probability)
+        .collect();
+
+    let max_index = posterior
+        .iter()
+        .enumerate()
+        .max_by(|a, b| a.1.partial_cmp(b.1).unwrap())
+        .map(|(idx, _)| idx)
+        .unwrap();
+
+    max_index + c
+}
+
+// bayesian allele states
+//fn posterior(x: f64, z: f64, n: i32, c: f64, alpha: f64, beta: f64) -> Vec<f64> {
+//    let mut likelihood_times_prior = Vec::new();
+//    let mut total_probability = 0.0;
+//
+//    for i in 1..n {
+//        //println!("i is {}", i);
+//        let p = i as f64 / n as f64;
+//        //println!("p is {}", p);
+//        //println!("c is {}", c);
+//        let lambdax = (p as f64) * c;
+//        //println!("lambdax is {}",lambdax);
+//        let lambday = (1.0-p as f64) * c;
+//        //println!("lambday is {}",lambday);
+//        
+//        let num = p.powf(x + alpha - 1.0) * (1.0-p).powf((z - x) + beta - 1.0);
+//        let denom = (lambdax.exp() - 1.0) * (lambday.exp() - 1.0);        
+//        let value = num/denom;
+//        //println!("Numerator is {}",num);
+//        //println!("Denominator is {}",denom);
+//        //println!("Value is {}",value);
+//        likelihood_times_prior.push(value);
+//        total_probability += value;
+//    }
+//        
+//    let post: Vec<f64> = likelihood_times_prior.iter().map(|&v| v / total_probability).collect();
+//
+//    return post;    
+//}
+//
+//fn highest_prob_index(probabilities: Vec<f64>) -> Option<usize> {
+//    probabilities.iter().enumerate().max_by(|a, b| a.1.partial_cmp(b.1).unwrap_or(std::cmp::Ordering::Equal)).map(|(index, _)| index)
+//}
+
+fn counts_to_bayes_state(count_pairs: Vec<String>, n: i32, cov:f64, c: usize, alpha: f64, beta: f64) -> Vec<usize>{
+    println!("Calculating posterior...");
+    let bayes_states: Vec<_> = count_pairs.iter()
+        .filter_map(|s| {
+            let parts: Vec<&str> = s.split(',').collect();
+            if parts.len() == 2 {
+                if let (Ok(num1), Ok(num2)) = (parts[0].parse::<f64>(), parts[1].parse::<f64>()) {
+                    //let x = num1.min(num2);
+                    //let max_num = num1.max(num2);
+                    //let z = x + max_num;
+                    let z = num1 + num2;
+                    let post = posterior_min_kmer_count(num1,z,n,cov,c,alpha,beta);
+                    return Some(post);
+                    //return highest_prob_index(post);
+                } else { return Some(0);}
+            } else { return Some(0); }
+        })
+        .collect();
+    // write frequencies to file
+    //write_file(bayes_states.clone().into_iter().map(|s| s.to_string()).collect(), output, "bayes_states.csv".to_string());
+    return bayes_states;
+}
+
 // Collect functions into one 
 fn kmers_to_hetmers(input: &String, output: &String, minimum: usize, alleles: usize, pool: i32, coverage: f64, alpha: f64, beta: f64){
     let kmers = load_kmers(input, minimum);
@@ -200,7 +333,7 @@ fn kmers_to_hetmers(input: &String, output: &String, minimum: usize, alleles: us
     let empirical_frequencies = counts_to_frequencies(hetmers.1.clone());
 
     // bayesian allele states
-    let bayes_states = counts_to_bayes_state(hetmers.1.clone(), pool, coverage, alpha, beta);
+    let bayes_states = counts_to_bayes_state(hetmers.1.clone(), pool, coverage, minimum, alpha, beta);
 
     // write output files
     write_file(hetmers.0, output, "seqs.csv");
@@ -210,88 +343,6 @@ fn kmers_to_hetmers(input: &String, output: &String, minimum: usize, alleles: us
     write_file(empirical_frequencies, output, "empirical_freqs.csv");
 
     //return hetmers;
-}
-
-// empirical allele frequencies
-fn counts_to_frequencies(count_pairs: Vec<String>) -> Vec<String> {
-    println!("Calculating frequencies...");
-    let frequencies: Vec<_> = count_pairs.iter()
-        .filter_map(|s| {
-            let parts: Vec<&str> = s.split(',').collect();
-            if parts.len() == 2 {
-                if let (Ok(num1), Ok(num2)) = (parts[0].parse::<f64>(), parts[1].parse::<f64>()) {
-                    let min_num = num1.min(num2);
-                    let max_num = num1.max(num2);
-                    let sum = min_num + max_num;
-                    if sum != 0.0 {
-                        return Some(min_num / sum);
-                    }
-                }
-            }
-        None
-        })
-        .collect();
-
-    // write frequencies to file
-    let freq_strings: Vec<_> = frequencies.clone().into_iter().map(|s| s.to_string()).collect();
-    //write_file(freq_strings.clone(), output, "empirical_freqs.csv".to_string());
-    // done
-    return freq_strings;
-}
-
-// bayesian allele states
-fn posterior(x: f64, z: f64, n: i32, c: f64, alpha: f64, beta: f64) -> Vec<f64> {
-    let mut likelihood_times_prior = Vec::new();
-    let mut total_probability = 0.0;
-
-    for i in 1..n {
-        //println!("i is {}", i);
-        let p = i as f64 / n as f64;
-        //println!("p is {}", p);
-        //println!("c is {}", c);
-        let lambdax = (p as f64) * c;
-        //println!("lambdax is {}",lambdax);
-        let lambday = (1.0-p as f64) * c;
-        //println!("lambday is {}",lambday);
-        
-        let num = p.powf(x + alpha - 1.0) * (1.0-p).powf((z - x) + beta - 1.0);
-        let denom = (lambdax.exp() - 1.0) * (lambday.exp() - 1.0);        
-        let value = num/denom;
-        //println!("Numerator is {}",num);
-        //println!("Denominator is {}",denom);
-        //println!("Value is {}",value);
-        likelihood_times_prior.push(value);
-        total_probability += value;
-    }
-        
-    let post: Vec<f64> = likelihood_times_prior.iter().map(|&v| v / total_probability).collect();
-
-    return post;    
-}
-
-fn highest_prob_index(probabilities: Vec<f64>) -> Option<usize> {
-    probabilities.iter().enumerate().max_by(|a, b| a.1.partial_cmp(b.1).unwrap_or(std::cmp::Ordering::Equal)).map(|(index, _)| index)
-}
-
-fn counts_to_bayes_state(count_pairs: Vec<String>, n: i32, c: f64, alpha: f64, beta: f64) -> Vec<usize>{
-    println!("Calculating posterior...");
-    let bayes_states: Vec<_> = count_pairs.iter()
-        .filter_map(|s| {
-            let parts: Vec<&str> = s.split(',').collect();
-            if parts.len() == 2 {
-                if let (Ok(num1), Ok(num2)) = (parts[0].parse::<f64>(), parts[1].parse::<f64>()) {
-                    let min_num = num1.min(num2);
-                    let max_num = num1.max(num2);
-                    let z = min_num + max_num;
-                    let post = posterior(min_num,z,n,c,alpha,beta);
-                    return highest_prob_index(post);
-                } else { return Some(0);}
-            } else { return Some(0); }
-        })
-        .collect();
-    // write frequencies to file
-    //write_file(bayes_states.clone().into_iter().map(|s| s.to_string()).collect(), output, "bayes_states.csv".to_string());
-    return bayes_states;
 }
 
 // fst
@@ -363,12 +414,25 @@ mod tests {
         assert_eq!(result, expected);
     }
 
+    //#[test]
+    //fn find_highest_prob(){
+    //    let post: Vec<f64> = vec![0.01, 0.05, 0.001, 0.111, 0.009, 0.04, 0.0000005];
+    //    let result = highest_prob_index(post);
+    //    let expected = 3;
+    //    assert_eq!(result, Some(expected));
+    //}
+    
+    // helper function to test equality of floating point numbers
+    fn round_to_decimals(x: f64, decimals: u32) -> f64 {
+        let factor = 10f64.powi(decimals as i32);
+        (x * factor).round() / factor
+    }
+
     #[test]
-    fn find_highest_prob(){
-        let post: Vec<f64> = vec![0.01, 0.05, 0.001, 0.111, 0.009, 0.04, 0.0000005];
-        let result = highest_prob_index(post);
-        let expected = 3;
-        assert_eq!(result, Some(expected));
+    fn small_truncation(){
+        let result = round_to_decimals(truncation_constant(5, 10.0), 7);
+        let expected = 0.9707473;
+        assert_eq!(result, expected);
     }
 }
 
