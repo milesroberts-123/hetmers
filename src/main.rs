@@ -2,10 +2,8 @@ use std::collections::HashMap;
 use std::fs::File;
 use std::io::{BufRead, BufReader, Write};
 use clap::Parser; // argument parser
-//use bio::alphabets::dna;
 use sha2::{Digest, Sha256};
 use itertools::izip;
-//use std::collections::hash_map::Keys
 use statrs::function::gamma::gamma;
 use std::f64;
 
@@ -189,7 +187,7 @@ fn counts_to_frequencies(count_pairs: &Vec<String>) -> Vec<String> {
         .collect();
 
     // reformatting frequency list
-    let freq_strings: Vec<_> = frequencies.clone().into_iter().map(|s| s.to_string()).collect();
+    let freq_strings: Vec<String> = frequencies.into_iter().map(|s| s.to_string()).collect();
     return freq_strings;
 }
 
@@ -303,8 +301,6 @@ fn kmers_to_hetmers(input: &String, output: &String, minimum: usize, alleles: us
     write_file(hetmers.2.iter().map(|num| num.to_string()).collect(), output, "hashes.csv");
     write_file(bayes_states.into_iter().map(|s| s.to_string()).collect(), output, "bayes_states.csv");
     write_file(empirical_frequencies, output, "empirical_freqs.csv");
-
-    //return hetmers;
 }
 
 // fst
@@ -327,7 +323,7 @@ fn kmers_to_hetmers(input: &String, output: &String, minimum: usize, alleles: us
 
 // test functions
 #[cfg(test)]
-mod tests {
+mod units {
     use super::*;
 
     #[test]
@@ -386,20 +382,56 @@ mod tests {
     }
 
     #[test]
-    fn correct_number_of_alleles() {
+    fn two_alleles() {
         let mut input = HashMap::new();
         input.insert(1, vec![0, 1]);
         input.insert(2, vec![2, 3, 4]); // should be filtered out
-        input.insert(2, vec![2, 3, 4, 5]); // should be filtered out
-	input.insert(2, vec![2]); // should be filtered out
-	input.insert(3, vec![5, 6]);
+        input.insert(3, vec![2, 3, 4, 5]); // should be filtered out
+	input.insert(4, vec![2]); // should be filtered out
+	input.insert(5, vec![5, 6]);
 
         let alleles = 2;
         let result = filter_groups(input, alleles);
 
         let mut expected = HashMap::new();
         expected.insert(1, vec![0, 1]);
-        expected.insert(3, vec![5, 6]);
+        expected.insert(5, vec![5, 6]);
+
+        assert_eq!(result, expected);
+    }
+
+    #[test]
+    fn three_alleles() {
+        let mut input = HashMap::new();
+        input.insert(1, vec![0, 1]);
+        input.insert(2, vec![2, 3, 4]);
+        input.insert(3, vec![2, 3, 4, 5]);
+        input.insert(4, vec![2]);
+        input.insert(5, vec![5, 6]);
+
+        let alleles = 3;
+        let result = filter_groups(input, alleles);
+
+        let mut expected = HashMap::new();
+        expected.insert(2, vec![2, 3, 4]);
+
+        assert_eq!(result, expected);
+    }
+
+    #[test]
+    fn four_alleles() {
+        let mut input = HashMap::new();
+        input.insert(1, vec![0, 1]);
+        input.insert(2, vec![2, 3, 4]);
+        input.insert(3, vec![2, 3, 4, 5]);
+        input.insert(4, vec![2]);
+        input.insert(5, vec![5, 6]);
+
+        let alleles = 4;
+        let result = filter_groups(input, alleles);
+
+        let mut expected = HashMap::new();
+        expected.insert(3, vec![2, 3, 4, 5]);
 
         assert_eq!(result, expected);
     }
