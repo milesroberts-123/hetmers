@@ -85,9 +85,11 @@ If you want to perform the same analysis on more than one population, then you c
 
 - [x] get hetmers shared across populations
 
-- [ ] use hash from kmers_to_hetmers to find shared hetmers in two different samples
+- [x] write some tests
 
-- [ ] write some tests
+- [ ] maximum k-mer count?
+
+- [ ] use hash from kmers_to_hetmers to find shared hetmers in two different samples
 
 - [ ] bayesian pool size (is n constant for each k-mer)
 

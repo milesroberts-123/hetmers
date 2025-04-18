@@ -77,7 +77,7 @@ fn load_kmers(input: &String, minimum: usize) -> (Vec<String>, Vec<usize>) {
 }
 
 // get kmer without central bp
-fn extract_border(seqs: Vec<String>) -> Vec<String> {
+fn extract_border(seqs: &Vec<String>) -> Vec<String> {
     let k = seqs[0].len();
     println!("k is {}", k);
     let k_half = k / 2;
@@ -90,7 +90,7 @@ fn extract_border(seqs: Vec<String>) -> Vec<String> {
 }
 
 // reverse complement sequences
-fn rev_comp(seqs: Vec<String>) -> Vec<String> {
+fn rev_comp(seqs: &Vec<String>) -> Vec<String> {
    println!("Reverse complementing...");
     let complement = |c: char| match c {
         'A' => 'T', 'T' => 'A', 'C' => 'G', 'G' => 'C', _ => c
@@ -140,9 +140,8 @@ fn group_hashes(hashes: Vec<u64>) -> HashMap<u64, Vec<usize>>{
 // filter hashes by number of alleles
 fn filter_groups(input: HashMap<u64, Vec<usize>>, alleles: usize) -> HashMap<u64, Vec<usize>> {
     println!("Filtering hash groups by number of alleles...");
-    let output = input.iter()
+    let output = input.into_iter()
         .filter(|(_, v)| v.len() == alleles)
-        .map(|(k, v)| (*k, v.clone()))
         .collect();
 
     return output;
@@ -170,7 +169,7 @@ fn write_file(output: Vec<String>, prefix: &String, suffix: &str) {
 }
 
 // empirical allele frequencies
-fn counts_to_frequencies(count_pairs: Vec<String>) -> Vec<String> {
+fn counts_to_frequencies(count_pairs: &Vec<String>) -> Vec<String> {
     println!("Calculating frequencies...");
     let frequencies: Vec<_> = count_pairs.iter()
         .filter_map(|s| {
@@ -189,10 +188,8 @@ fn counts_to_frequencies(count_pairs: Vec<String>) -> Vec<String> {
         })
         .collect();
 
-    // write frequencies to file
+    // reformatting frequency list
     let freq_strings: Vec<_> = frequencies.clone().into_iter().map(|s| s.to_string()).collect();
-    //write_file(freq_strings.clone(), output, "empirical_freqs.csv".to_string());
-    // done
     return freq_strings;
 }
 
@@ -209,7 +206,7 @@ fn truncation_constant(c: usize, lambda: f64) -> f64 {
     1.0 - sum
 }
 
-/// Compute posterior where the minor k-mer count is variable
+// Compute posterior where the minor k-mer count is variable
 fn posterior_min_kmer_count(x: f64, z: f64, n: i32, cov: f64, c: usize, alpha: f64, beta: f64) -> usize {
     let mut likelihood_times_prior = Vec::new();
     let mut total_probability = 0.0;
@@ -243,41 +240,8 @@ fn posterior_min_kmer_count(x: f64, z: f64, n: i32, cov: f64, c: usize, alpha: f
     max_index + c
 }
 
-// bayesian allele states
-//fn posterior(x: f64, z: f64, n: i32, c: f64, alpha: f64, beta: f64) -> Vec<f64> {
-//    let mut likelihood_times_prior = Vec::new();
-//    let mut total_probability = 0.0;
-//
-//    for i in 1..n {
-//        //println!("i is {}", i);
-//        let p = i as f64 / n as f64;
-//        //println!("p is {}", p);
-//        //println!("c is {}", c);
-//        let lambdax = (p as f64) * c;
-//        //println!("lambdax is {}",lambdax);
-//        let lambday = (1.0-p as f64) * c;
-//        //println!("lambday is {}",lambday);
-//        
-//        let num = p.powf(x + alpha - 1.0) * (1.0-p).powf((z - x) + beta - 1.0);
-//        let denom = (lambdax.exp() - 1.0) * (lambday.exp() - 1.0);        
-//        let value = num/denom;
-//        //println!("Numerator is {}",num);
-//        //println!("Denominator is {}",denom);
-//        //println!("Value is {}",value);
-//        likelihood_times_prior.push(value);
-//        total_probability += value;
-//    }
-//        
-//    let post: Vec<f64> = likelihood_times_prior.iter().map(|&v| v / total_probability).collect();
-//
-//    return post;    
-//}
-//
-//fn highest_prob_index(probabilities: Vec<f64>) -> Option<usize> {
-//    probabilities.iter().enumerate().max_by(|a, b| a.1.partial_cmp(b.1).unwrap_or(std::cmp::Ordering::Equal)).map(|(index, _)| index)
-//}
-
-fn counts_to_bayes_state(count_pairs: Vec<String>, n: i32, cov:f64, c: usize, alpha: f64, beta: f64) -> Vec<usize>{
+// calculate posterior distribution for allele count
+fn counts_to_bayes_state(count_pairs: &Vec<String>, n: i32, cov:f64, c: usize, alpha: f64, beta: f64) -> Vec<usize>{
     println!("Calculating posterior...");
     let bayes_states: Vec<_> = count_pairs.iter()
         .filter_map(|s| {
@@ -295,8 +259,6 @@ fn counts_to_bayes_state(count_pairs: Vec<String>, n: i32, cov:f64, c: usize, al
             } else { return Some(0); }
         })
         .collect();
-    // write frequencies to file
-    //write_file(bayes_states.clone().into_iter().map(|s| s.to_string()).collect(), output, "bayes_states.csv".to_string());
     return bayes_states;
 }
 
@@ -305,10 +267,10 @@ fn kmers_to_hetmers(input: &String, output: &String, minimum: usize, alleles: us
     let kmers = load_kmers(input, minimum);
     //println!("{:?}", kmers);
 
-    let borders = extract_border(kmers.0.clone());
+    let borders = extract_border(&kmers.0);
     //println!("{:?}", borders);
 
-    let revborders = rev_comp(borders.clone());
+    let revborders = rev_comp(&borders);
     //println!("{:?}", revborders);
 
     let hashbord = hash_seqs(borders);
@@ -330,10 +292,10 @@ fn kmers_to_hetmers(input: &String, output: &String, minimum: usize, alleles: us
     //println!("{:?}", hetmers);
 
     // empirical frequencies
-    let empirical_frequencies = counts_to_frequencies(hetmers.1.clone());
+    let empirical_frequencies = counts_to_frequencies(&hetmers.1);
 
     // bayesian allele states
-    let bayes_states = counts_to_bayes_state(hetmers.1.clone(), pool, coverage, minimum, alpha, beta);
+    let bayes_states = counts_to_bayes_state(&hetmers.1, pool, coverage, minimum, alpha, beta);
 
     // write output files
     write_file(hetmers.0, output, "seqs.csv");
@@ -363,10 +325,6 @@ fn kmers_to_hetmers(input: &String, output: &String, minimum: usize, alleles: us
 //    return output;
 //}
 
-// fn kmers_to_hetmers
-
-// frequency increment test
-
 // test functions
 #[cfg(test)]
 mod tests {
@@ -375,7 +333,7 @@ mod tests {
     #[test]
     fn odd_k_borders() {
         let test_vec = vec!["ATGCA".to_string(), "TTGAT".to_string(), "GGATA".to_string()];
-        let result = extract_border(test_vec);
+        let result = extract_border(&test_vec);
         let expected = vec!["ATCA".to_string(), "TTAT".to_string(), "GGTA".to_string()];
         assert_eq!(result, expected);
     }
@@ -383,7 +341,7 @@ mod tests {
     #[test]
     fn even_k_borders() {
         let test_vec = vec!["ATGCAT".to_string(), "TTGATC".to_string(), "GGATAA".to_string()];
-        let result = extract_border(test_vec);
+        let result = extract_border(&test_vec);
         let expected = vec!["ATGAT".to_string(), "TTGTC".to_string(), "GGAAA".to_string()];
         assert_eq!(result, expected);
     }
@@ -391,7 +349,7 @@ mod tests {
     #[test]
     fn short_rev_comp() {
         let test_vec = vec!["ATGCAT".to_string(), "TTGATC".to_string(), "GGATAA".to_string()];
-        let result = rev_comp(test_vec);
+        let result = rev_comp(&test_vec);
         let expected = vec!["ATGCAT".to_string(), "GATCAA".to_string(), "TTATCC".to_string()];
         assert_eq!(result, expected);
     }
@@ -409,18 +367,10 @@ mod tests {
     fn a_few_freqs(){
         // Vec<String>, output: String
         let count_pairs = vec!["5,120".to_string(), "1,9".to_string(), "20,140".to_string(), "22,22".to_string()];
-        let result = counts_to_frequencies(count_pairs);
+        let result = counts_to_frequencies(&count_pairs);
         let expected = vec!["0.04".to_string(), "0.1".to_string(), "0.125".to_string(), "0.5".to_string()];
         assert_eq!(result, expected);
     }
-
-    //#[test]
-    //fn find_highest_prob(){
-    //    let post: Vec<f64> = vec![0.01, 0.05, 0.001, 0.111, 0.009, 0.04, 0.0000005];
-    //    let result = highest_prob_index(post);
-    //    let expected = 3;
-    //    assert_eq!(result, Some(expected));
-    //}
     
     // helper function to test equality of floating point numbers
     fn round_to_decimals(x: f64, decimals: u32) -> f64 {
@@ -434,6 +384,37 @@ mod tests {
         let expected = 0.9707473;
         assert_eq!(result, expected);
     }
+
+    #[test]
+    fn correct_number_of_alleles() {
+        let mut input = HashMap::new();
+        input.insert(1, vec![0, 1]);
+        input.insert(2, vec![2, 3, 4]); // should be filtered out
+        input.insert(2, vec![2, 3, 4, 5]); // should be filtered out
+	input.insert(2, vec![2]); // should be filtered out
+	input.insert(3, vec![5, 6]);
+
+        let alleles = 2;
+        let result = filter_groups(input, alleles);
+
+        let mut expected = HashMap::new();
+        expected.insert(1, vec![0, 1]);
+        expected.insert(3, vec![5, 6]);
+
+        assert_eq!(result, expected);
+    }
+
+    #[test]
+    fn filter_groups_no_matches() {
+        let mut input = HashMap::new();
+        input.insert(1, vec![0]);
+        input.insert(2, vec![1, 2, 3]);
+
+        let result = filter_groups(input, 2);
+        let expected: HashMap<u64, Vec<usize>> = HashMap::new();
+
+        assert_eq!(result, expected);
+    }
 }
 
 // mix it all together! :D
@@ -444,21 +425,8 @@ fn main() {
     //if args.analyses.contains(&"hetmers".to_string()) { 
     // loop over individual populations
     for (input, output, minimum, coverage, pool, alpha, beta) in izip!(&args.inputs, &args.outputs, &args.minimums, args.coverages, args.pools, args.alphas, args.betas) {
-        // find hetmers
-        //println!("{}", "1");
         kmers_to_hetmers(input, output, *minimum, args.alleles, pool, coverage, alpha, beta);
-
-        // empirical hetmer frequencies
-        //let empirical_freqs = counts_to_frequencies(hetmers.1.clone(), output.clone());
-        //println!("{:?}", empirical_freqs);
-    
-        // bayesian hetmer frequencies
-        //if args.analyses.contains(&"bayes".to_string()) { 
-        //let bayes_states = counts_to_bayes_state(hetmers.1, pool, coverage, alpha, beta, output.to_string());
-        //}
-        //println!("{:?}", bayes_states);
     }
-    //}
 
    // analyses comparing two populations, or pairs of populations
    //let num_pops = args.inputs.len();
