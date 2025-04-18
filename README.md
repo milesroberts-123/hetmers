@@ -2,31 +2,34 @@
 
 Rust script for working with heterozygous k-mers in pooled sequencing data for population genetics
 
+# Table of Contents
+
 # Usage
 
 ```
-Usage: hetmers [OPTIONS] --input <INPUT> --output <OUTPUT> --coverage <COVERAGE> --pool <POOL>
+Usage: hetmers [OPTIONS] --inputs <INPUTS>... --outputs <OUTPUTS>... --analyses <ANALYSES>... --minimums <MINIMUMS>... --coverages <COVERAGES>... --pools <POOLS>... --alphas <ALPHAS>... --betas <BETAS>...
 
 Options:
-  -i, --input <INPUT>
-  -m, --minimum <MINIMUM>    [default: 1]
-  -l, --alleles <ALLELES>    [default: 2]
-  -o, --output <OUTPUT>
-  -c, --coverage <COVERAGE>
-  -p, --pool <POOL>
-  -a, --alpha <ALPHA>        [default: 1]
-  -b, --beta <BETA>          [default: 1]
-  -h, --help                 Print help
-  -V, --version              Print version
+  -i, --inputs <INPUTS>...        kmer count table file name
+  -o, --outputs <OUTPUTS>...      prefix for output files
+  -y, --analyses <ANALYSES>...    analysis type to run [possible values: hetmers, emp_freq, bayes_freq, fst, dxy, fit]
+  -m, --minimums <MINIMUMS>...    minimum k-mer count
+  -l, --alleles <ALLELES>         number of alleles in each hetmer [default: 2]
+  -c, --coverages <COVERAGES>...  mean k-mer coverage
+  -p, --pools <POOLS>...          pool size
+  -a, --alphas <ALPHAS>...        shape parameter for prior distribution (bayes_freq analysis)
+  -b, --betas <BETAS>...          shape parameter for prior distribution (bayes_freq_analysis)
+  -h, --help                      Print help
+  -V, --version                   Print version
 ```
 
-# How to use
+# Tutorial
 
 ## 1. get pooled sequening data
 
 ### create pseudo pools
 
-If you have sequencing data for individuals, you can creat pseudo-pooled sequencing data by downsampling every individual to the same sequencing depth and then concatenating the downsampled fastq files.
+If you have sequencing data for individuals, you can create pseudo-pooled sequencing data by downsampling every individual to the same sequencing depth and then concatenating the downsampled fastq files.
 
 ## 2. count k-mers
 
@@ -44,17 +47,31 @@ You will want to know a few things:
 
 * average k-mer coverage ((L-k+1)/L)*(N*L/(G))
 
-### one population
+### Analysis of 1 population
 
-`hetmers --inputs test.tsv --minimums 1 --alleles 2 --outputs yay --coverages 100 --pools 50 --alphas 1 --betas 1`
+`hetmers --inputs test.tsv --minimums 1 --alleles 2 --outputs yay --coverages 100 --pools 50 --alphas 1 --betas 1 --analyses hetmers`
 
-### comparing two populations
+### Analysis of 2 populations
+
+#### Finding hetmers shared between two populations
+
+#### Finding hetmers specific to one population
+
+#### Fst
 
 If you want to perform the same analysis on more than one population, then you can pass vectors to each argument.
 
-`hetmers --inputs test.tsv test2.tsv --minimums 1 1 --alleles 2 --outputs yay yay2 --coverages 100 50 --pools 50 25 --alphas 1 1 --betas 1 1`
+`hetmers --inputs test.tsv test2.tsv --minimums 1 1 --alleles 2 --outputs yay yay2 --coverages 100 50 --pools 50 25 --alphas 1 1 --betas 1 1 --analyses fst`
 
-### comparing >2 populations
+### Analysis of >2 populations
+
+# Examples
+
+## Find putative SNPs in one pool
+
+## Find putative SNPs specific to one pool (not shared with other pools)
+
+## Measure Fst for hetmers shared between two pools
 
 # To-do
 
@@ -64,6 +81,16 @@ If you want to perform the same analysis on more than one population, then you c
 
 - [x] loop over multiple populations separately
 
+- [x] get population specific hetmers
+
+- [x] get hetmers shared across populations
+
+- [x] write some tests
+
+- [ ] maximum k-mer count?
+
+- [ ] use hash from kmers_to_hetmers to find shared hetmers in two different samples
+
 - [ ] bayesian pool size (is n constant for each k-mer)
 
 - [ ] confidence intervals for allele frequencies
@@ -71,6 +98,8 @@ If you want to perform the same analysis on more than one population, then you c
 - [ ] credible intervals for allele frequencies
 
 - [ ] Fst
+
+- [ ] dxy
 
 - [ ] Diversity
 

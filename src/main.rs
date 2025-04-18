@@ -5,47 +5,54 @@ use clap::Parser; // argument parser
 //use bio::alphabets::dna;
 use sha2::{Digest, Sha256};
 use itertools::izip;
+//use std::collections::hash_map::Keys
+use statrs::function::gamma::gamma;
+use std::f64;
 
 // Structure of input arguments
 #[derive(Parser, Debug)]
 #[command(version, about, long_about = None)]
 struct Args {
-    // kmer count table file name
-    #[arg(short, long, num_args = 1.., value_delimiter = ' ')]
+    /// kmer count table file name
+    #[arg(short, long, num_args = 1.., value_delimiter = ' ', required = true)]
     inputs: Vec<String>,
 
-    // minimum kmer count
-    #[arg(short, long, num_args = 1.., value_delimiter = ' ')]
+    /// prefix for output files
+    #[arg(short, long, num_args = 1.., value_delimiter = ' ', required = true)]
+    outputs: Vec<String>,
+
+    /// analysis type to run
+    //#[arg(short = 'y', long, num_args = 1.., value_delimiter = ' ', required = true, value_parser = clap::builder::PossibleValuesParser::new(["hetmers", "emp_freq", "bayes_freq", "fst", "dxy", "fit"]))]
+    //analyses: Vec<String>,
+
+    /// minimum k-mer count
+    #[arg(short, long, num_args = 1.., value_delimiter = ' ', required = true)]
     minimums: Vec<usize>,
 
-    // number of alleles in each hetmer
+    /// number of alleles in each hetmer
     #[arg(short = 'l', long, default_value_t = 2)]
     alleles: usize,
 
-    // kmer count table file name
-    #[arg(short, long, num_args = 1.., value_delimiter = ' ')]
-    outputs: Vec<String>,
-
-    // mean k-mer coverage
-    #[arg(short, long, num_args = 1.., value_delimiter = ' ')]
+    /// mean k-mer coverage
+    #[arg(short, long, num_args = 1.., value_delimiter = ' ', required = true)]
     coverages: Vec<f64>,
 
-    // pool size
-    #[arg(short, long, num_args = 1.., value_delimiter = ' ')]
+    /// pool size
+    #[arg(short, long, num_args = 1.., value_delimiter = ' ', required = true)]
     pools: Vec<i32>,
 
-    // minimum kmer count
-    #[arg(short, long, num_args = 1.., value_delimiter = ' ')]
+    /// shape parameter for prior distribution (bayes_freq analysis)
+    #[arg(short, long, num_args = 1.., value_delimiter = ' ', required = true)]
     alphas: Vec<f64>,
 
-    // minimum kmer count
-    #[arg(short, long, num_args = 1.., value_delimiter = ' ')]
+    /// shape parameter for prior distribution (bayes_freq_analysis)
+    #[arg(short, long, num_args = 1.., value_delimiter = ' ', required = true)]
     betas: Vec<f64>,
 }
 
 
 // Function to read in kmer count table
-fn load_kmers(input: String, minimum: usize) -> (Vec<String>, Vec<usize>) {
+fn load_kmers(input: &String, minimum: usize) -> (Vec<String>, Vec<usize>) {
     println!("Loading k-mer count file {}...", input);
     let file = File::open(input).expect("Unable to open file");
     let reader = BufReader::new(file);
@@ -70,7 +77,7 @@ fn load_kmers(input: String, minimum: usize) -> (Vec<String>, Vec<usize>) {
 }
 
 // get kmer without central bp
-fn extract_border(seqs: Vec<String>) -> Vec<String> {
+fn extract_border(seqs: &Vec<String>) -> Vec<String> {
     let k = seqs[0].len();
     println!("k is {}", k);
     let k_half = k / 2;
@@ -83,7 +90,7 @@ fn extract_border(seqs: Vec<String>) -> Vec<String> {
 }
 
 // reverse complement sequences
-fn rev_comp(seqs: Vec<String>) -> Vec<String> {
+fn rev_comp(seqs: &Vec<String>) -> Vec<String> {
    println!("Reverse complementing...");
     let complement = |c: char| match c {
         'A' => 'T', 'T' => 'A', 'C' => 'G', 'G' => 'C', _ => c
@@ -133,9 +140,8 @@ fn group_hashes(hashes: Vec<u64>) -> HashMap<u64, Vec<usize>>{
 // filter hashes by number of alleles
 fn filter_groups(input: HashMap<u64, Vec<usize>>, alleles: usize) -> HashMap<u64, Vec<usize>> {
     println!("Filtering hash groups by number of alleles...");
-    let output = input.iter()
+    let output = input.into_iter()
         .filter(|(_, v)| v.len() == alleles)
-        .map(|(k, v)| (*k, v.clone()))
         .collect();
 
     return output;
@@ -143,7 +149,7 @@ fn filter_groups(input: HashMap<u64, Vec<usize>>, alleles: usize) -> HashMap<u64
 
 
 // extract hetmer sequences and counts based on hashes
-fn extract_hetmers(hashdict: HashMap<u64, Vec<usize>>, seqs: Vec<String>, counts: Vec<usize>) -> (Vec<String>, Vec<String>) {
+fn extract_hetmers(hashdict: HashMap<u64, Vec<usize>>, seqs: Vec<String>, counts: Vec<usize>) -> (Vec<String>, Vec<String>, Vec<u64>) {
     println!("Extracting counts and sequences...");
     let hetmer_seqs: Vec<String> = hashdict.values()
         .map(|indices| indices.iter().map(|&i| seqs[i].clone()).collect::<Vec<String>>().join(","))
@@ -152,53 +158,18 @@ fn extract_hetmers(hashdict: HashMap<u64, Vec<usize>>, seqs: Vec<String>, counts
         .map(|indices| indices.iter().map(|&i| counts[i].to_string()).collect::<Vec<String>>().join(","))
         .collect();
 
-    return (hetmer_seqs, hetmer_counts);
+    return (hetmer_seqs, hetmer_counts, hashdict.into_iter().map(|(id, _score)| id).collect());
 }
 
 // write vector to file
-fn write_file(output: Vec<String>, prefix: String, suffix: String) {
+fn write_file(output: Vec<String>, prefix: &String, suffix: &str) {
     println!("Saving results...");
     let mut file = File::create(format!("{}_{}", prefix, suffix)).expect("Unable to create file");
     writeln!(file, "{}", output.join("\n")).expect("Unable to write to file");
 }
 
-// Collect functions into one 
-fn kmers_to_hetmers(input: String, output: String, minimum: usize, alleles: usize) -> (Vec<std::string::String>, Vec<std::string::String>){
-    let kmers = load_kmers(input, minimum);
-    println!("{:?}", kmers);
-
-    let borders = extract_border(kmers.0.clone());
-    println!("{:?}", borders);
-
-    let revborders = rev_comp(borders.clone());
-    println!("{:?}", revborders);
-
-    let hashbord = hash_seqs(borders);
-    println!("{:?}", hashbord);
-
-    let hashrevbord = hash_seqs(revborders);
-    println!("{:?}", hashrevbord);
-
-    let min_hashes = min_hash(hashbord, hashrevbord);
-    println!("{:?}", min_hashes);
-
-    let grouped_hashes = group_hashes(min_hashes);
-    println!("{:?}", grouped_hashes);
-
-    let filtered_groups = filter_groups(grouped_hashes, alleles);
-    println!("{:?}", filtered_groups);
-
-    let hetmers = extract_hetmers(filtered_groups, kmers.0, kmers.1);
-    println!("{:?}", hetmers);
-
-    write_file(hetmers.0.clone(), output.clone(), "seqs.csv".to_string());
-    write_file(hetmers.1.clone(), output, "counts.csv".to_string());
-
-    return hetmers;
-}
-
 // empirical allele frequencies
-fn counts_to_frequencies(count_pairs: Vec<String>, output: String) -> Vec<f64> {
+fn counts_to_frequencies(count_pairs: &Vec<String>) -> Vec<String> {
     println!("Calculating frequencies...");
     let frequencies: Vec<_> = count_pairs.iter()
         .filter_map(|s| {
@@ -217,142 +188,276 @@ fn counts_to_frequencies(count_pairs: Vec<String>, output: String) -> Vec<f64> {
         })
         .collect();
 
-    // write frequencies to file
-    write_file(frequencies.clone().into_iter().map(|s| s.to_string()).collect(), output, "empirical_freqs.csv".to_string());
-    // done
-    return frequencies;
+    // reformatting frequency list
+    let freq_strings: Vec<_> = frequencies.clone().into_iter().map(|s| s.to_string()).collect();
+    return freq_strings;
 }
 
-// bayesian allele states
-fn posterior(x: f64, z: f64, n: i32, c: f64, alpha: f64, beta: f64) -> Vec<f64> {
+// Compute truncation constant
+fn truncation_constant(c: usize, lambda: f64) -> f64 {
+    let sum: f64 = (0..c)
+        .map(|x| {
+            let numerator = (-lambda).exp() * lambda.powi(x as i32);
+            let denominator = gamma((x + 1) as f64); // factorial(x)
+            numerator / denominator
+        })
+        .sum();
+
+    1.0 - sum
+}
+
+// Compute posterior where the minor k-mer count is variable
+fn posterior_min_kmer_count(x: f64, z: f64, n: i32, cov: f64, c: usize, alpha: f64, beta: f64) -> usize {
     let mut likelihood_times_prior = Vec::new();
     let mut total_probability = 0.0;
 
     for i in 1..n {
-        //println!("i is {}", i);
         let p = i as f64 / n as f64;
-        //println!("p is {}", p);
-        //println!("c is {}", c);
-        let lambdax = (p as f64) * c;
-        //println!("lambdax is {}",lambdax);
-        let lambday = (1.0-p as f64) * c;
-        //println!("lambday is {}",lambday);
-        
-        let num = p.powf(x + alpha - 1.0) * (1.0-p).powf((z - x) + beta - 1.0);
-        let denom = (lambdax.exp() - 1.0) * (lambday.exp() - 1.0);        
-        let value = num/denom;
-        //println!("Numerator is {}",num);
-        //println!("Denominator is {}",denom);
-        //println!("Value is {}",value);
-        likelihood_times_prior.push(value);
-        total_probability += value;
+        let lambda_x = (i as f64) * (cov as f64);
+        let lambda_y = ((n - i) as f64) * (cov as f64);
+
+        let tx = truncation_constant(c, lambda_x);
+        let ty = truncation_constant(c, lambda_y);
+
+        let likelihood = p.powf(x as f64 + alpha - 1.0) * (1.0 - p).powf((z - x) as f64 + beta - 1.0);
+        let likelihood_truncated = likelihood / (tx * ty);
+        likelihood_times_prior.push(likelihood_truncated);
+        total_probability += likelihood;
     }
-        
-    let post: Vec<f64> = likelihood_times_prior.iter().map(|&v| v / total_probability).collect();
 
-    return post;    
+    let posterior: Vec<f64> = likelihood_times_prior
+        .iter()
+        .map(|val| val / total_probability)
+        .collect();
+
+    let max_index = posterior
+        .iter()
+        .enumerate()
+        .max_by(|a, b| a.1.partial_cmp(b.1).unwrap())
+        .map(|(idx, _)| idx)
+        .unwrap();
+
+    max_index + c
 }
 
-fn highest_prob_index(probabilities: Vec<f64>) -> Option<usize> {
-    probabilities.iter().enumerate().max_by(|a, b| a.1.partial_cmp(b.1).unwrap_or(std::cmp::Ordering::Equal)).map(|(index, _)| index)
-}
-
-fn counts_to_bayes_state(count_pairs: Vec<String>, n: i32, c: f64, alpha: f64, beta: f64, output: String) -> Vec<usize>{
+// calculate posterior distribution for allele count
+fn counts_to_bayes_state(count_pairs: &Vec<String>, n: i32, cov:f64, c: usize, alpha: f64, beta: f64) -> Vec<usize>{
     println!("Calculating posterior...");
     let bayes_states: Vec<_> = count_pairs.iter()
         .filter_map(|s| {
             let parts: Vec<&str> = s.split(',').collect();
             if parts.len() == 2 {
                 if let (Ok(num1), Ok(num2)) = (parts[0].parse::<f64>(), parts[1].parse::<f64>()) {
-                    let min_num = num1.min(num2);
-                    let max_num = num1.max(num2);
-                    let z = min_num + max_num;
-                    let post = posterior(min_num,z,n,c,alpha,beta);
-                    return highest_prob_index(post);
+                    //let x = num1.min(num2);
+                    //let max_num = num1.max(num2);
+                    //let z = x + max_num;
+                    let z = num1 + num2;
+                    let post = posterior_min_kmer_count(num1,z,n,cov,c,alpha,beta);
+                    return Some(post);
+                    //return highest_prob_index(post);
                 } else { return Some(0);}
             } else { return Some(0); }
         })
         .collect();
-    // write frequencies to file
-    write_file(bayes_states.clone().into_iter().map(|s| s.to_string()).collect(), output, "bayes_states.csv".to_string());
     return bayes_states;
 }
 
-// fst
+// Collect functions into one 
+fn kmers_to_hetmers(input: &String, output: &String, minimum: usize, alleles: usize, pool: i32, coverage: f64, alpha: f64, beta: f64){
+    let kmers = load_kmers(input, minimum);
+    //println!("{:?}", kmers);
 
-// frequency increment test
+    let borders = extract_border(&kmers.0);
+    //println!("{:?}", borders);
+
+    let revborders = rev_comp(&borders);
+    //println!("{:?}", revborders);
+
+    let hashbord = hash_seqs(borders);
+    //println!("{:?}", hashbord);
+
+    let hashrevbord = hash_seqs(revborders);
+    //println!("{:?}", hashrevbord);
+
+    let min_hashes = min_hash(hashbord, hashrevbord);
+    //println!("{:?}", min_hashes);
+
+    let grouped_hashes = group_hashes(min_hashes);
+    //println!("{:?}", grouped_hashes);
+
+    let filtered_groups = filter_groups(grouped_hashes, alleles);
+    //println!("{:?}", filtered_groups);
+
+    let hetmers = extract_hetmers(filtered_groups, kmers.0, kmers.1);
+    //println!("{:?}", hetmers);
+
+    // empirical frequencies
+    let empirical_frequencies = counts_to_frequencies(&hetmers.1);
+
+    // bayesian allele states
+    let bayes_states = counts_to_bayes_state(&hetmers.1, pool, coverage, minimum, alpha, beta);
+
+    // write output files
+    write_file(hetmers.0, output, "seqs.csv");
+    write_file(hetmers.1, output, "counts.csv");
+    write_file(hetmers.2.iter().map(|num| num.to_string()).collect(), output, "hashes.csv");
+    write_file(bayes_states.into_iter().map(|s| s.to_string()).collect(), output, "bayes_states.csv");
+    write_file(empirical_frequencies, output, "empirical_freqs.csv");
+
+    //return hetmers;
+}
+
+// fst
+//fn shared_hetmers(map1: Vec<u64>, map2: Vec<u64>) -> Vec<u64>{
+//    println!("Find hetmers shared between two maps...");
+//    let output = map1.into_iter()
+//        .filter(|k| map2.contains(k))
+//        .collect();
+//    return output;
+//}
+
+//fn population_specific_hetmers(map1: &HashMap<u64, Vec<usize>>, map2: &HashMap<u64, Vec<usize>>) -> HashMap<u64, Vec<usize>>{
+//    println!("Find hetmers specific to one map...");
+//    let output = map1.iter()
+//        .filter(|(k, _)| !map2.contains_key(k))
+//        .map(|(k, v)| (*k, v.clone()))
+//        .collect();
+//    return output;
+//}
+
+// test functions
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn odd_k_borders() {
+        let test_vec = vec!["ATGCA".to_string(), "TTGAT".to_string(), "GGATA".to_string()];
+        let result = extract_border(&test_vec);
+        let expected = vec!["ATCA".to_string(), "TTAT".to_string(), "GGTA".to_string()];
+        assert_eq!(result, expected);
+    }
+
+    #[test]
+    fn even_k_borders() {
+        let test_vec = vec!["ATGCAT".to_string(), "TTGATC".to_string(), "GGATAA".to_string()];
+        let result = extract_border(&test_vec);
+        let expected = vec!["ATGAT".to_string(), "TTGTC".to_string(), "GGAAA".to_string()];
+        assert_eq!(result, expected);
+    }
+
+    #[test]
+    fn short_rev_comp() {
+        let test_vec = vec!["ATGCAT".to_string(), "TTGATC".to_string(), "GGATAA".to_string()];
+        let result = rev_comp(&test_vec);
+        let expected = vec!["ATGCAT".to_string(), "GATCAA".to_string(), "TTATCC".to_string()];
+        assert_eq!(result, expected);
+    }
+
+    #[test]
+    fn small_min_hash() {
+        let test_vec_1 = vec![59888, 1, 100];
+        let test_vec_2 = vec![59887, 5000, 101];
+        let result = min_hash(test_vec_1, test_vec_2);
+        let expected = vec![59887, 1, 100];
+        assert_eq!(result, expected);
+    }
+
+    #[test]
+    fn a_few_freqs(){
+        // Vec<String>, output: String
+        let count_pairs = vec!["5,120".to_string(), "1,9".to_string(), "20,140".to_string(), "22,22".to_string()];
+        let result = counts_to_frequencies(&count_pairs);
+        let expected = vec!["0.04".to_string(), "0.1".to_string(), "0.125".to_string(), "0.5".to_string()];
+        assert_eq!(result, expected);
+    }
+    
+    // helper function to test equality of floating point numbers
+    fn round_to_decimals(x: f64, decimals: u32) -> f64 {
+        let factor = 10f64.powi(decimals as i32);
+        (x * factor).round() / factor
+    }
+
+    #[test]
+    fn small_truncation(){
+        let result = round_to_decimals(truncation_constant(5, 10.0), 7);
+        let expected = 0.9707473;
+        assert_eq!(result, expected);
+    }
+
+    #[test]
+    fn correct_number_of_alleles() {
+        let mut input = HashMap::new();
+        input.insert(1, vec![0, 1]);
+        input.insert(2, vec![2, 3, 4]); // should be filtered out
+        input.insert(2, vec![2, 3, 4, 5]); // should be filtered out
+	input.insert(2, vec![2]); // should be filtered out
+	input.insert(3, vec![5, 6]);
+
+        let alleles = 2;
+        let result = filter_groups(input, alleles);
+
+        let mut expected = HashMap::new();
+        expected.insert(1, vec![0, 1]);
+        expected.insert(3, vec![5, 6]);
+
+        assert_eq!(result, expected);
+    }
+
+    #[test]
+    fn filter_groups_no_matches() {
+        let mut input = HashMap::new();
+        input.insert(1, vec![0]);
+        input.insert(2, vec![1, 2, 3]);
+
+        let result = filter_groups(input, 2);
+        let expected: HashMap<u64, Vec<usize>> = HashMap::new();
+
+        assert_eq!(result, expected);
+    }
+}
 
 // mix it all together! :D
 fn main() {
     //let args: Vec<String> = env::args().collect();
     let args = Args::parse(); 
 
-    //for _ in 0..args.count {
-    //    println!("Hello {}!", args.name);
-    //}
-
-    //let input = &args[1];  // Input file path
-    //let alleles = &args[2]; // How many alleles to have for hetmers
-    //let minimum = &args[2]; // Minimum k-mer count
-    //let output_prefix = &args[3];  // Output file prefix
-
-    //println!("Input file is {input}");
-    //println!("allele type is {alleles}");
-    //println!("Minimum hetmer count is {minimum}");
-    //println!("Output prefix is {output_prefix}");
-
-    //let minimum = minimum.parse::<usize>().unwrap();
-    //let kmers = load_kmers(args.input, args.minimum);
-
-    //println!("{:?}", kmers);
-
-    //let borders = extract_border(kmers.0.clone());
-    //println!("{:?}", borders);
-
-    //let revborders = rev_comp(borders.clone());
-    //println!("{:?}", revborders);
-
-    //let hashbord = hash_seqs(borders);
-    //println!("{:?}", hashbord);
-
-    //let hashrevbord = hash_seqs(revborders);
-    //println!("{:?}", hashrevbord);
-
-    //let min_hashes = min_hash(hashbord, hashrevbord);
-    //println!("{:?}", min_hashes);
-
-    //let grouped_hashes = group_hashes(min_hashes);
-    //println!("{:?}", grouped_hashes);
-
-    //let filtered_groups = filter_groups(grouped_hashes, args.alleles);
-    //println!("{:?}", filtered_groups);
-
-    //let hetmers = extract_hetmers(filtered_groups, kmers.0, kmers.1);
-    //println!("{:?}", hetmers);
-
-    //write_file(hetmers.0, args.output.clone(), "seqs.csv".to_string());
-    //write_file(hetmers.1, args.output, "counts.csv".to_string());
-
+    //if args.analyses.contains(&"hetmers".to_string()) { 
     // loop over individual populations
-    for (input, output, minimum, coverage, pool, alpha, beta) in izip!(args.inputs, args.outputs, args.minimums, args.coverages, args.pools, args.alphas, args.betas) {
-    //for input in args.input.into_iter(){
-        // find hetmers
-        println!("{}", "1");
-        let hetmers = kmers_to_hetmers(input, output.clone(), minimum, args.alleles);
-
-        // empirical hetmer frequencies
-        let empirical_freqs = counts_to_frequencies(hetmers.1.clone(), output.clone());
-        println!("{:?}", empirical_freqs);
-
-        //println!("{:?}", posterior(100.0, 200.0, 50, 100.0, 1.0, 1.0));
-        //println!("{:?}", highest_prob_index(posterior(25.0, 300.0, 50, 300.0, 1.0, 1.0)));
-    
-        // bayesian hetmer frequencies
-        let bayes_states = counts_to_bayes_state(hetmers.1, pool, coverage, alpha, beta, output);
-        println!("{:?}", bayes_states);
+    for (input, output, minimum, coverage, pool, alpha, beta) in izip!(&args.inputs, &args.outputs, &args.minimums, args.coverages, args.pools, args.alphas, args.betas) {
+        kmers_to_hetmers(input, output, *minimum, args.alleles, pool, coverage, alpha, beta);
     }
 
    // analyses comparing two populations, or pairs of populations
+   //let num_pops = args.inputs.len();
+
+   //if (num_pops == 2) && args.analyses.contains(&"fst".to_string()){
+       //for i in 0..(num_pops-1){
+       //    for j in (i+1)..num_pops{
+               //println!("{:?}", &args.inputs[0]);
+               //println!("{:?}", &args.inputs[1]);
+               // get hetmers that are specific to each population
+               //let map1 = kmers_to_hetmers(&args.inputs[0], args.outputs[0].clone(), args.minimums[0], args.alleles.clone());
+               //let map2 = kmers_to_hetmers(&args.inputs[1], args.outputs[1].clone(), args.minimums[1], args.alleles);
+
+               // find hetmers shared between the two populations (intersection of hash vector)
+               //let hetmers_in_common = shared_hetmers(map1.2,map2.2);
+               //println!("{:?}", hetmers_in_common
+
+               //let map1_specific_hetmers = population_specific_hetmers(&map1,&map2);
+               //println!("{:?}", map1_specific_hetmers);
+               //let map2_specific_hetmers = population_specific_hetmers(&map2,&map1);
+               //println!("{:?}", map2_specific_hetmers);
+
+               // calculate pairwise comparision
+           //}
+       //}
+   //}
 
    // analyses comparing three or more populations
+   //if num_pops > 2{
+       //println!("{}", ":D");
+   //}
+
+   println!("{}", "Done!");
 }

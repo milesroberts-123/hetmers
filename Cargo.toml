@@ -1,9 +1,10 @@
 [package]
 name = "hetmers"
-version = "0.3.0"
+version = "0.5.0"
 edition = "2021"
 
 [dependencies]
 clap = { version = "4.5.30", features = ["derive"] }
 sha2 = "0.10"
 itertools = "0.14"
+statrs = "0.16.0"
