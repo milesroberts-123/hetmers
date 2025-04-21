@@ -6,6 +6,7 @@ use sha2::{Digest, Sha256};
 use itertools::izip;
 use statrs::function::gamma::gamma;
 use std::f64;
+use std::collections::HashSet;
 
 // Structure of input arguments
 #[derive(Parser, Debug)]
@@ -54,23 +55,29 @@ fn load_kmers(input: &String, minimum: usize) -> (Vec<String>, Vec<usize>) {
     println!("Loading k-mer count file {}...", input);
     let file = File::open(input).expect("Unable to open file");
     let reader = BufReader::new(file);
-
     let mut seqs = Vec::new();
     let mut counts = Vec::new();
 
     for line in reader.lines() {
+
         let line = line.expect("Unable to read line");
         let parts: Vec<&str> = line.split('\t').collect();
+
         if parts.len() != 2 {
+            println!("Skipping line that does not have two tab-separated columns:");
+            println!("{}", line);
             continue;
         }
+
         let seq = parts[0].to_string();
         let count: usize = parts[1].parse().expect("Invalid count value");
+
         if count >= minimum {
             seqs.push(seq);
             counts.push(count);
         }
     }
+
     return(seqs, counts);
 }
 
@@ -161,7 +168,7 @@ fn extract_hetmers(hashdict: HashMap<u64, Vec<usize>>, seqs: Vec<String>, counts
 
 // write vector to file
 fn write_file(output: Vec<String>, prefix: &String, suffix: &str) {
-    println!("Saving results...");
+    println!("{}", format!("Saving results to {}_{}...", prefix, suffix));
     let mut file = File::create(format!("{}_{}", prefix, suffix)).expect("Unable to create file");
     writeln!(file, "{}", output.join("\n")).expect("Unable to write to file");
 }
@@ -208,8 +215,9 @@ fn truncation_constant(c: usize, lambda: f64) -> f64 {
 fn posterior_min_kmer_count(x: f64, z: f64, n: i32, cov: f64, c: usize, alpha: f64, beta: f64) -> usize {
     let mut likelihood_times_prior = Vec::new();
     let mut total_probability = 0.0;
+    let max_minor_count = n/2; // minor allele can't have frequency above 1/2 by definition
 
-    for i in 1..n {
+    for i in 1..max_minor_count {
         let p = i as f64 / n as f64;
         let lambda_x = (i as f64) * (cov as f64);
         let lambda_y = ((n - i) as f64) * (cov as f64);
@@ -246,11 +254,11 @@ fn counts_to_bayes_state(count_pairs: &Vec<String>, n: i32, cov:f64, c: usize, a
             let parts: Vec<&str> = s.split(',').collect();
             if parts.len() == 2 {
                 if let (Ok(num1), Ok(num2)) = (parts[0].parse::<f64>(), parts[1].parse::<f64>()) {
-                    //let x = num1.min(num2);
+                    let x = num1.min(num2);
                     //let max_num = num1.max(num2);
                     //let z = x + max_num;
                     let z = num1 + num2;
-                    let post = posterior_min_kmer_count(num1,z,n,cov,c,alpha,beta);
+                    let post = posterior_min_kmer_count(x,z,n,cov,c,alpha,beta);
                     return Some(post);
                     //return highest_prob_index(post);
                 } else { return Some(0);}
@@ -381,6 +389,64 @@ mod units {
         assert_eq!(result, expected);
     }
 
+    #[test]
+    fn seqs_from_hashmap() {
+        let mut input = HashMap::new();
+        input.insert(9875, vec![0, 4]);
+        input.insert(1111, vec![1, 2]);
+        input.insert(2222, vec![3, 5]);
+
+        let seqs = vec!["TCGTC".to_string(), "AATAA".to_string(), "AAGAA".to_string(), "GATGA".to_string(), "TCATC".to_string(), "GAAGA".to_string()];
+        let counts = vec![1, 10, 9, 2, 6, 100];
+
+        let result = extract_hetmers(input, seqs, counts);
+
+        let actual: HashSet<_> = result.0.into_iter().collect();
+        let expected: HashSet<_> = vec!["TCGTC,TCATC".to_string(), "GATGA,GAAGA".to_string(), "AATAA,AAGAA".to_string()].into_iter().collect();
+
+        //let expected = (extracted_seqs, vec!["1,6".to_string(), "2,100".to_string(), "10,9".to_string()], vec![9875, 2222, 1111]);
+
+        assert_eq!(actual, expected);
+    }
+
+    #[test]
+    fn counts_from_hashmap(){
+        let mut input = HashMap::new();
+        input.insert(9875, vec![0, 4]);
+        input.insert(1111, vec![1, 2]);
+        input.insert(2222, vec![3, 5]);
+
+        let seqs = vec!["TCGTC".to_string(), "AATAA".to_string(), "AAGAA".to_string(), "GATGA".to_string(), "TCATC".to_string(), "GAAGA".to_string()];
+        let counts = vec![1, 10, 9, 2, 6, 100];
+
+        let result = extract_hetmers(input, seqs, counts);
+
+        let actual: HashSet<_> = result.1.into_iter().collect();
+        let expected: HashSet<_> = vec!["1,6".to_string(), "2,100".to_string(), "10,9".to_string()].into_iter().collect();
+
+        assert_eq!(actual, expected);
+
+    }
+
+    #[test]
+    fn hashes_from_hashmap(){
+        let mut input = HashMap::new();
+        input.insert(9875, vec![0, 4]);
+        input.insert(1111, vec![1, 2]);
+        input.insert(2222, vec![3, 5]);
+
+        let seqs = vec!["TCGTC".to_string(), "AATAA".to_string(), "AAGAA".to_string(), "GATGA".to_string(), "TCATC".to_string(), "GAAGA".to_string()];
+        let counts = vec![1, 10, 9, 2, 6, 100];
+
+        let result = extract_hetmers(input, seqs, counts);
+
+        let actual: HashSet<_> = result.2.into_iter().collect();
+        let expected: HashSet<_> = vec![9875, 2222, 1111].into_iter().collect();
+
+        assert_eq!(actual, expected);
+
+    }
+    
     #[test]
     fn two_alleles() {
         let mut input = HashMap::new();
