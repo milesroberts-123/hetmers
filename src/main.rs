@@ -47,6 +47,10 @@ struct Args {
     /// shape parameter for prior distribution (bayes_freq_analysis)
     #[arg(short, long, num_args = 1.., value_delimiter = ' ', required = true)]
     betas: Vec<f64>,
+
+    /// shape parameter for prior distribution (bayes_freq_analysis)
+    #[arg(short, long, num_args = 1.., value_delimiter = ' ', required = true)]
+    sigmas: Vec<f64>,
 }
 
 
@@ -198,6 +202,33 @@ fn counts_to_frequencies(count_pairs: &Vec<String>) -> Vec<String> {
     return freq_strings;
 }
 
+// Tag hetmers with really high total coverage (potentially due to paralogous sequences)
+fn high_cov_hetmers(count_pairs: &Vec<String>, sigma: f64, n: i32, cov: f64) -> Vec<String> {
+    println!("Checking for questionable hetmers...");
+    let potential_filter: Vec<_> = count_pairs.iter()
+        .filter_map(|s| {
+            let parts: Vec<&str> = s.split(',').collect();
+            if parts.len() == 2 {
+                if let (Ok(num1), Ok(num2)) = (parts[0].parse::<f64>(), parts[1].parse::<f64>()) {
+                    let sum = num1 + num2;
+                    let stderr = ((n as f64)*(cov as f64)).sqrt();
+                    if sum > (sigma*stderr) as f64 {
+                        return Some(1);
+                    } else{
+                        return Some(0);
+                    }
+                }
+            }
+        None
+        })
+        .collect();
+
+    // reformatting frequency list
+    let potent_strings: Vec<String> = potential_filter.into_iter().map(|s| s.to_string()).collect();
+    return potent_strings;
+
+}
+
 // Compute truncation constant
 fn truncation_constant(c: usize, lambda: f64) -> f64 {
     let sum: f64 = (0..c)
@@ -273,6 +304,9 @@ fn kmers_to_hetmers(input: &String, output: &String, minimum: usize, alleles: us
     let kmers = load_kmers(input, minimum);
     //println!("{:?}", kmers);
 
+    // input checks
+    input_checks(&kmers.0);
+
     let borders = extract_border(&kmers.0);
     //println!("{:?}", borders);
 
@@ -302,6 +336,9 @@ fn kmers_to_hetmers(input: &String, output: &String, minimum: usize, alleles: us
 
     // bayesian allele states
     let bayes_states = counts_to_bayes_state(&hetmers.1, pool, coverage, minimum, alpha, beta);
+
+    // check for hetmers with weirdly high coverage
+    //let check_these_hetmers = high_cov_hetmers(&hetmers.1, sigma, pool, coverage);
 
     // write output files
     write_file(hetmers.0, output, "seqs.csv");
@@ -513,6 +550,40 @@ mod units {
 
         assert_eq!(result, expected);
     }
+}
+
+// error checking code for input
+//fn check_input_sort(seqs: &Vec<String>) -> bool{
+//    let seqs_sub = &seqs[..1000];
+//    let sorted_seqs = &seqs_sub.sort();
+    //assert_eq!(seqs, sorted_seqs);
+//    println!("{}", seqs == sorted_seqs); 
+
+//    let result = (seqs == sorted_seqs);
+
+//    return result;
+//}
+
+// check if k-mer list is sorted
+fn check_input_sort(seqs: &Vec<String>) -> bool {
+    // Limit to the first 1000 elements (or fewer)
+    let limit = seqs.len().min(1000);
+    let seqs_sub = &seqs[..limit];
+
+    // Make a new Vec and sort it
+    let mut sorted_seqs = seqs_sub.to_vec();
+    sorted_seqs.sort();
+
+    // Compare original slice with sorted one
+    let result = seqs_sub == &sorted_seqs;
+
+    println!("Input sorted: {}", result);
+    result
+}
+
+fn input_checks(seqs: &Vec<String>){
+    println!("Checking input format...");
+    check_input_sort(seqs);
 }
 
 // mix it all together! :D
