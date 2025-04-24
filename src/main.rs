@@ -40,15 +40,15 @@ struct Args {
     #[arg(short, long, num_args = 1.., value_delimiter = ' ', required = true)]
     pools: Vec<i32>,
 
-    /// shape parameter for prior distribution (bayes_freq analysis)
+    /// shape parameter for prior distribution
     #[arg(short, long, num_args = 1.., value_delimiter = ' ', required = true)]
     alphas: Vec<f64>,
 
-    /// shape parameter for prior distribution (bayes_freq_analysis)
+    /// shape parameter for prior distribution
     #[arg(short, long, num_args = 1.., value_delimiter = ' ', required = true)]
     betas: Vec<f64>,
 
-    /// shape parameter for prior distribution (bayes_freq_analysis)
+    /// thresholds for determining if k-mer has abnormal copy number
     #[arg(short, long, num_args = 1.., value_delimiter = ' ', required = true)]
     sigmas: Vec<f64>,
 }
@@ -300,12 +300,12 @@ fn counts_to_bayes_state(count_pairs: &Vec<String>, n: i32, cov:f64, c: usize, a
 }
 
 // Collect functions into one 
-fn kmers_to_hetmers(input: &String, output: &String, minimum: usize, alleles: usize, pool: i32, coverage: f64, alpha: f64, beta: f64){
+fn kmers_to_hetmers(input: &String, output: &String, minimum: usize, alleles: usize, pool: i32, coverage: f64, alpha: f64, beta: f64, sigma: f64){
     let kmers = load_kmers(input, minimum);
     //println!("{:?}", kmers);
 
     // input checks
-    input_checks(&kmers.0);
+    input_checkers::all_checks(&kmers.0);
 
     let borders = extract_border(&kmers.0);
     //println!("{:?}", borders);
@@ -338,7 +338,7 @@ fn kmers_to_hetmers(input: &String, output: &String, minimum: usize, alleles: us
     let bayes_states = counts_to_bayes_state(&hetmers.1, pool, coverage, minimum, alpha, beta);
 
     // check for hetmers with weirdly high coverage
-    //let check_these_hetmers = high_cov_hetmers(&hetmers.1, sigma, pool, coverage);
+    let check_these_hetmers = high_cov_hetmers(&hetmers.1, sigma, pool, coverage);
 
     // write output files
     write_file(hetmers.0, output, "seqs.csv");
@@ -346,6 +346,7 @@ fn kmers_to_hetmers(input: &String, output: &String, minimum: usize, alleles: us
     write_file(hetmers.2.iter().map(|num| num.to_string()).collect(), output, "hashes.csv");
     write_file(bayes_states.into_iter().map(|s| s.to_string()).collect(), output, "bayes_states.csv");
     write_file(empirical_frequencies, output, "empirical_freqs.csv");
+    write_file(check_these_hetmers, output, "bad_hetmers.csv");
 }
 
 // fst
@@ -565,25 +566,47 @@ mod units {
 //}
 
 // check if k-mer list is sorted
-fn check_input_sort(seqs: &Vec<String>) -> bool {
-    // Limit to the first 1000 elements (or fewer)
-    let limit = seqs.len().min(1000);
-    let seqs_sub = &seqs[..limit];
+mod input_checkers {
+    // check that k-mers are lexicographically sorted
+    fn check_sort(seqs: &Vec<String>) -> bool {
+        // Limit to the first 1000 elements (or fewer)
+        let limit = seqs.len().min(1000);
+        let seqs_sub = &seqs[..limit];
 
-    // Make a new Vec and sort it
-    let mut sorted_seqs = seqs_sub.to_vec();
-    sorted_seqs.sort();
+        // Make a new Vec and sort it
+        let mut sorted_seqs = seqs_sub.to_vec();
+        sorted_seqs.sort();
 
-    // Compare original slice with sorted one
-    let result = seqs_sub == &sorted_seqs;
+        // Compare original slice with sorted one
+        let result = seqs_sub == &sorted_seqs;
 
-    println!("Input sorted: {}", result);
-    result
-}
+        println!("Input sorted: {}", result);
+        result
+    }
 
-fn input_checks(seqs: &Vec<String>){
-    println!("Checking input format...");
-    check_input_sort(seqs);
+    // check that only ATGC are in alphabet
+    fn check_letters(seqs: &Vec<String>) -> bool {
+        // Limit to the first 1000 elements (or fewer)
+        let limit = seqs.len().min(1000);
+        let seqs_sub = &seqs[..limit];
+
+        let result = seqs_sub.iter().all(|seq| seq.chars().all(|c| matches!(c, 'A' | 'T' | 'G' | 'C')));
+        println!("Only ATGC: {}", result);
+        result
+    }
+
+    // combine all checks together
+    pub fn all_checks(seqs: &Vec<String>){
+        println!("Checking input format...");
+        if check_sort(seqs) == false {
+            panic!(":(");
+        }
+
+        if check_letters(seqs) == false {
+            panic!(":(")
+        }
+    }
+
 }
 
 // mix it all together! :D
@@ -593,8 +616,8 @@ fn main() {
 
     //if args.analyses.contains(&"hetmers".to_string()) { 
     // loop over individual populations
-    for (input, output, minimum, coverage, pool, alpha, beta) in izip!(&args.inputs, &args.outputs, &args.minimums, args.coverages, args.pools, args.alphas, args.betas) {
-        kmers_to_hetmers(input, output, *minimum, args.alleles, pool, coverage, alpha, beta);
+    for (input, output, minimum, coverage, pool, alpha, beta, sigma) in izip!(&args.inputs, &args.outputs, &args.minimums, args.coverages, args.pools, args.alphas, args.betas, args.sigmas) {
+        kmers_to_hetmers(input, output, *minimum, args.alleles, pool, coverage, alpha, beta, sigma);
     }
 
    // analyses comparing two populations, or pairs of populations

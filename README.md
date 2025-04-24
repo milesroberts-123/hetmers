@@ -87,9 +87,11 @@ If you want to perform the same analysis on more than one population, then you c
 
 - [x] write some tests
 
-- [ ] tag hetmers with really high total coverage
+- [x] add some error checking code for inputs
 
-- [ ] add some error checking code for inputs
+- [x] check letters in k-mers
+
+- [x] tag hetmers with really high total coverage
 
 - [ ] remove support for > 2 alleles
 
