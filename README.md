@@ -87,6 +87,14 @@ If you want to perform the same analysis on more than one population, then you c
 
 - [x] write some tests
 
+- [x] add some error checking code for inputs
+
+- [x] check letters in k-mers
+
+- [x] tag hetmers with really high total coverage
+
+- [ ] remove support for > 2 alleles
+
 - [ ] maximum k-mer count?
 
 - [ ] use hash from kmers_to_hetmers to find shared hetmers in two different samples
