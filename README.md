@@ -93,6 +93,8 @@ If you want to perform the same analysis on more than one population, then you c
 
 - [x] tag hetmers with really high total coverage
 
+- [ ] verify that candidate hetmers (based on hash functions) actually differ
+
 - [ ] include read length in k-mer coverage calculation?
 
 - [ ] what if there's a duplicate k-mer?

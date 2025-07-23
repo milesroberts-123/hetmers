@@ -170,6 +170,14 @@ fn extract_hetmers(hashdict: HashMap<u64, Vec<usize>>, seqs: Vec<String>, counts
     return (hetmer_seqs, hetmer_counts, hashdict.into_iter().map(|(id, _score)| id).collect());
 }
 
+// check if the k-mers in a hetmer actually differ
+fn verify_muts_at_pos(s1: &str, s2: &str, positions: &[usize]) -> bool {
+    let bytes1 = s1.as_bytes();
+    let bytes2 = s2.as_bytes();
+
+    positions.iter().all(|&pos| bytes1[pos] != bytes2[pos])
+}
+
 // write vector to file
 fn write_file(output: &Vec<String>, prefix: &String, suffix: &str) {
     println!("{}", format!("Saving results to {}_{}...", prefix, suffix));
@@ -465,6 +473,26 @@ mod units {
         assert_eq!(result, expected);
     }
     
+    #[test]
+    fn check_single_muts(){
+        let a = "GATTACA";
+        let b = "GATCACA";
+        let positions = vec![3];
+        let result = verify_muts_at_pos(a, b, &positions);
+        let expected = true;
+        assert_eq!(result, expected);
+    }
+
+    #[test]
+    fn check_multi_muts(){
+        let a = "GATTACA";
+        let b = "GCTCACA";
+        let positions = vec![1,3];
+        let result = verify_muts_at_pos(a, b, &positions);
+        let expected = true;
+        assert_eq!(result, expected);
+    }
+
     // helper function to test equality of floating point numbers
     fn round_to_decimals(x: f64, decimals: u32) -> f64 {
         let factor = 10f64.powi(decimals as i32);
