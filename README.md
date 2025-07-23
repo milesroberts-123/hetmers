@@ -7,18 +7,18 @@ Rust script for working with heterozygous k-mers in pooled sequencing data for p
 # Usage
 
 ```
-Usage: hetmers [OPTIONS] --inputs <INPUTS>... --outputs <OUTPUTS>... --analyses <ANALYSES>... --minimums <MINIMUMS>... --coverages <COVERAGES>... --pools <POOLS>... --alphas <ALPHAS>... --betas <BETAS>...
+Usage: hetmers [OPTIONS] --inputs <INPUTS>... --outputs <OUTPUTS>... --minimums <MINIMUMS>... --coverages <COVERAGES>... --pools <POOLS>... --alphas <ALPHAS>... --betas <BETAS>... --sigmas <SIGMAS>...
 
 Options:
   -i, --inputs <INPUTS>...        kmer count table file name
   -o, --outputs <OUTPUTS>...      prefix for output files
-  -y, --analyses <ANALYSES>...    analysis type to run [possible values: hetmers, emp_freq, bayes_freq, fst, dxy, fit]
-  -m, --minimums <MINIMUMS>...    minimum k-mer count
+  -m, --minimums <MINIMUMS>...    analysis type to run minimum k-mer count
   -l, --alleles <ALLELES>         number of alleles in each hetmer [default: 2]
   -c, --coverages <COVERAGES>...  mean k-mer coverage
   -p, --pools <POOLS>...          pool size
-  -a, --alphas <ALPHAS>...        shape parameter for prior distribution (bayes_freq analysis)
-  -b, --betas <BETAS>...          shape parameter for prior distribution (bayes_freq_analysis)
+  -a, --alphas <ALPHAS>...        shape parameter for prior distribution
+  -b, --betas <BETAS>...          shape parameter for prior distribution
+  -s, --sigmas <SIGMAS>...        thresholds for determining if k-mer has abnormal copy number
   -h, --help                      Print help
   -V, --version                   Print version
 ```
@@ -92,6 +92,10 @@ If you want to perform the same analysis on more than one population, then you c
 - [x] check letters in k-mers
 
 - [x] tag hetmers with really high total coverage
+
+- [ ] include read length in k-mer coverage calculation?
+
+- [ ] what if there's a duplicate k-mer?
 
 - [ ] remove support for > 2 alleles
 
