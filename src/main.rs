@@ -21,8 +21,8 @@ struct Args {
     outputs: Vec<String>,
 
     /// analysis type to run
-    //#[arg(short = 'y', long, num_args = 1.., value_delimiter = ' ', required = true, value_parser = clap::builder::PossibleValuesParser::new(["hetmers", "emp_freq", "bayes_freq", "fst", "dxy", "fit"]))]
-    //analyses: Vec<String>,
+    #[arg(short = 'y', long, num_args = 1.., value_delimiter = ' ', required = true, value_parser = clap::builder::PossibleValuesParser::new(["hetmers", "emp_freq", "bayes_freq", "fst", "dxy", "fit"]))]
+    analyses: Vec<String>,
 
     /// minimum k-mer count
     #[arg(short, long, num_args = 1.., value_delimiter = ' ', required = true)]
@@ -170,8 +170,16 @@ fn extract_hetmers(hashdict: HashMap<u64, Vec<usize>>, seqs: Vec<String>, counts
     return (hetmer_seqs, hetmer_counts, hashdict.into_iter().map(|(id, _score)| id).collect());
 }
 
+// check if the k-mers in a hetmer actually differ
+fn verify_muts_at_pos(s1: &str, s2: &str, positions: &[usize]) -> bool {
+    let bytes1 = s1.as_bytes();
+    let bytes2 = s2.as_bytes();
+
+    positions.iter().all(|&pos| bytes1[pos] != bytes2[pos])
+}
+
 // write vector to file
-fn write_file(output: Vec<String>, prefix: &String, suffix: &str) {
+fn write_file(output: &Vec<String>, prefix: &String, suffix: &str) {
     println!("{}", format!("Saving results to {}_{}...", prefix, suffix));
     let mut file = File::create(format!("{}_{}", prefix, suffix)).expect("Unable to create file");
     writeln!(file, "{}", output.join("\n")).expect("Unable to write to file");
@@ -300,36 +308,34 @@ fn counts_to_bayes_state(count_pairs: &Vec<String>, n: i32, cov:f64, c: usize, a
 }
 
 // Collect functions into one 
-fn kmers_to_hetmers(input: &String, output: &String, minimum: usize, alleles: usize, pool: i32, coverage: f64, alpha: f64, beta: f64, sigma: f64){
+fn kmers_to_hetmers(input: &String, output: &String, minimum: usize, alleles: usize, pool: i32, coverage: f64, alpha: f64, beta: f64, sigma: f64) -> (Vec<std::string::String>, Vec<std::string::String>, Vec<u64>) {
+    // load k-mers
     let kmers = load_kmers(input, minimum);
-    //println!("{:?}", kmers);
 
     // input checks
     input_checkers::all_checks(&kmers.0);
 
+    // remove central base from each k-mer
     let borders = extract_border(&kmers.0);
-    //println!("{:?}", borders);
 
+    // reverse complement borders
     let revborders = rev_comp(&borders);
-    //println!("{:?}", revborders);
 
+    // get hash of borders
     let hashbord = hash_seqs(borders);
-    //println!("{:?}", hashbord);
-
     let hashrevbord = hash_seqs(revborders);
-    //println!("{:?}", hashrevbord);
 
+    // compare forward and reverse hash and take the min
     let min_hashes = min_hash(hashbord, hashrevbord);
-    //println!("{:?}", min_hashes);
 
+    // group the hashes into a dictionary
     let grouped_hashes = group_hashes(min_hashes);
-    //println!("{:?}", grouped_hashes);
 
+    // remove hashes that had only one or more than 2 k-mers per group
     let filtered_groups = filter_groups(grouped_hashes, alleles);
-    //println!("{:?}", filtered_groups);
 
+    // extract sequences for each hash group
     let hetmers = extract_hetmers(filtered_groups, kmers.0, kmers.1);
-    //println!("{:?}", hetmers);
 
     // empirical frequencies
     let empirical_frequencies = counts_to_frequencies(&hetmers.1);
@@ -341,31 +347,84 @@ fn kmers_to_hetmers(input: &String, output: &String, minimum: usize, alleles: us
     let check_these_hetmers = high_cov_hetmers(&hetmers.1, sigma, pool, coverage);
 
     // write output files
-    write_file(hetmers.0, output, "seqs.csv");
-    write_file(hetmers.1, output, "counts.csv");
-    write_file(hetmers.2.iter().map(|num| num.to_string()).collect(), output, "hashes.csv");
-    write_file(bayes_states.into_iter().map(|s| s.to_string()).collect(), output, "bayes_states.csv");
-    write_file(empirical_frequencies, output, "empirical_freqs.csv");
-    write_file(check_these_hetmers, output, "bad_hetmers.csv");
+    write_file(&hetmers.0, output, "seqs.csv");
+    write_file(&hetmers.1, output, "counts.csv");
+    write_file(&hetmers.2.iter().map(|num| num.to_string()).collect(), output, "hashes.csv");
+    write_file(&bayes_states.into_iter().map(|s| s.to_string()).collect(), output, "bayes_states.csv");
+    write_file(&empirical_frequencies, output, "empirical_freqs.csv");
+    write_file(&check_these_hetmers, output, "bad_hetmers.csv");
+
+    return hetmers;
 }
 
-// fst
-//fn shared_hetmers(map1: Vec<u64>, map2: Vec<u64>) -> Vec<u64>{
-//    println!("Find hetmers shared between two maps...");
-//    let output = map1.into_iter()
-//        .filter(|k| map2.contains(k))
-//        .collect();
-//    return output;
+// functions to calculate fst or otherwise comapre two sets of k-mers/het-mers
+//mod fst {
+//
+//    pub fn shared_hetmers(map1: Vec<u64>, map2: Vec<u64>) -> Vec<u64>{
+//        println!("Find hetmers shared between two maps...");
+//        let output = map1.into_iter()
+//            .filter(|k| map2.contains(k))
+//            .collect();
+//        return output;
+//    }
+//    
+//    pub fn population_specific_hetmers(map1: Vec<u64>, map2: Vec<u64>) -> Vec<u64>{
+//        println!("Find hetmers specific to one population...");
+//        let output = map1.into_iter()
+//            .filter(|k| !map2.contains(k))
+//            .collect();
+//        return output;
+//    }
+//    
+//    pub fn convert_u64_to_string(vec: &Vec<u64>) -> Vec<String> {
+//        vec.iter().map(|num| num.to_string()).collect()
+//    }
+//    
 //}
 
-//fn population_specific_hetmers(map1: &HashMap<u64, Vec<usize>>, map2: &HashMap<u64, Vec<usize>>) -> HashMap<u64, Vec<usize>>{
-//    println!("Find hetmers specific to one map...");
-//    let output = map1.iter()
-//        .filter(|(k, _)| !map2.contains_key(k))
-//        .map(|(k, v)| (*k, v.clone()))
-//        .collect();
-//    return output;
-//}
+// functions to check that input is properly formated
+mod input_checkers {
+    // check that k-mers are lexicographically sorted
+    fn check_sort(seqs: &Vec<String>) -> bool {
+        // Limit to the first 1000 elements (or fewer)
+        let limit = seqs.len().min(1000);
+        let seqs_sub = &seqs[..limit];
+
+        // Make a new Vec and sort it
+        let mut sorted_seqs = seqs_sub.to_vec();
+        sorted_seqs.sort();
+
+        // Compare original slice with sorted one
+        let result = seqs_sub == &sorted_seqs;
+
+        println!("Input sorted: {}", result);
+        result
+    }
+
+    // check that only ATGC are in alphabet
+    fn check_letters(seqs: &Vec<String>) -> bool {
+        // Limit to the first 1000 elements (or fewer)
+        let limit = seqs.len().min(1000);
+        let seqs_sub = &seqs[..limit];
+
+        let result = seqs_sub.iter().all(|seq| seq.chars().all(|c| matches!(c, 'A' | 'T' | 'G' | 'C')));
+        println!("Only ATGC: {}", result);
+        result
+    }
+
+    // combine all checks together
+    pub fn all_checks(seqs: &Vec<String>){
+        println!("Checking input format...");
+        if check_sort(seqs) == false {
+            panic!(":(");
+        }
+
+        if check_letters(seqs) == false {
+            panic!(":(")
+        }
+    }
+
+}
 
 // test functions
 #[cfg(test)]
@@ -414,6 +473,26 @@ mod units {
         assert_eq!(result, expected);
     }
     
+    #[test]
+    fn check_single_muts(){
+        let a = "GATTACA";
+        let b = "GATCACA";
+        let positions = vec![3];
+        let result = verify_muts_at_pos(a, b, &positions);
+        let expected = true;
+        assert_eq!(result, expected);
+    }
+
+    #[test]
+    fn check_multi_muts(){
+        let a = "GATTACA";
+        let b = "GCTCACA";
+        let positions = vec![1,3];
+        let result = verify_muts_at_pos(a, b, &positions);
+        let expected = true;
+        assert_eq!(result, expected);
+    }
+
     // helper function to test equality of floating point numbers
     fn round_to_decimals(x: f64, decimals: u32) -> f64 {
         let factor = 10f64.powi(decimals as i32);
@@ -565,65 +644,58 @@ mod units {
 //    return result;
 //}
 
-// check if k-mer list is sorted
-mod input_checkers {
-    // check that k-mers are lexicographically sorted
-    fn check_sort(seqs: &Vec<String>) -> bool {
-        // Limit to the first 1000 elements (or fewer)
-        let limit = seqs.len().min(1000);
-        let seqs_sub = &seqs[..limit];
-
-        // Make a new Vec and sort it
-        let mut sorted_seqs = seqs_sub.to_vec();
-        sorted_seqs.sort();
-
-        // Compare original slice with sorted one
-        let result = seqs_sub == &sorted_seqs;
-
-        println!("Input sorted: {}", result);
-        result
-    }
-
-    // check that only ATGC are in alphabet
-    fn check_letters(seqs: &Vec<String>) -> bool {
-        // Limit to the first 1000 elements (or fewer)
-        let limit = seqs.len().min(1000);
-        let seqs_sub = &seqs[..limit];
-
-        let result = seqs_sub.iter().all(|seq| seq.chars().all(|c| matches!(c, 'A' | 'T' | 'G' | 'C')));
-        println!("Only ATGC: {}", result);
-        result
-    }
-
-    // combine all checks together
-    pub fn all_checks(seqs: &Vec<String>){
-        println!("Checking input format...");
-        if check_sort(seqs) == false {
-            panic!(":(");
-        }
-
-        if check_letters(seqs) == false {
-            panic!(":(")
-        }
-    }
-
-}
 
 // mix it all together! :D
 fn main() {
     //let args: Vec<String> = env::args().collect();
     let args = Args::parse(); 
 
-    //if args.analyses.contains(&"hetmers".to_string()) { 
-    // loop over individual populations
-    for (input, output, minimum, coverage, pool, alpha, beta, sigma) in izip!(&args.inputs, &args.outputs, &args.minimums, args.coverages, args.pools, args.alphas, args.betas, args.sigmas) {
-        kmers_to_hetmers(input, output, *minimum, args.alleles, pool, coverage, alpha, beta, sigma);
+    if args.analyses.contains(&"hetmers".to_string()) { 
+        // loop over individual populations
+        for (input, output, minimum, coverage, pool, alpha, beta, sigma) in izip!(&args.inputs, &args.outputs, &args.minimums, args.coverages, args.pools, args.alphas, args.betas, args.sigmas) {
+            kmers_to_hetmers(input, output, *minimum, args.alleles, pool, coverage, alpha, beta, sigma);
+        }
     }
 
+
+
+
+
+    // 1. Get het-mers for pop 1
+    // 2. Get het-mers for pop 2
+    // 3. Get het-mers for pop 1 + 2 combined list
+    // 4. separate het-mers into categories
+    // 4.1. shared het-mers
+    // 4.2. het-mers exclusive to pop 1
+    // 4.3. het-mers exclusive to pop 2
+    // 4.4. het-mers exclusive to pop 1 + 2
+//    if args.analyses.contains(&"fst".to_string()){
+//        let hetmers_pop1 = kmers_to_hetmers(&args.inputs[0], &args.outputs[0], args.minimums[0], args.alleles.clone(), args.pools[0], args.coverages[0], args.alphas[0], args.betas[0], args.sigmas[0]);
+//        let hetmers_pop2 = kmers_to_hetmers(&args.inputs[1], &args.outputs[1], args.minimums[1], args.alleles.clone(), args.pools[1], args.coverages[1], args.alphas[1], args.betas[1], args.sigmas[1]);
+//        let hetmers_pop12 = kmers_to_hetmers(&args.inputs[2], &args.outputs[2], args.minimums[2], args.alleles.clone(), args.pools[2], args.coverages[2], args.alphas[2], args.betas[2], args.sigmas[2]);
+//        
+//        // shared hetmers
+//        let hetmer_union = fst::shared_hetmers(hetmers_pop1.2, hetmers_pop2.2);
+//        
+//        // population specific het-mers
+//        let hetmer_pop1_specific = fst::population_specific_hetmers(hetmers_pop1.2, hetmers_pop2.2);
+//        let hetmer_pop2_specific = fst::population_specific_hetmers(hetmers_pop2.2, hetmers_pop1.2);
+//        
+//        // het-mers exclusive to combined list
+//        let hetmers_pop12_minus1 = fst::population_specific_hetmers(hetmers_pop12.2, hetmers_pop1.2);
+//        let hetmers_pop12_minus12 = fst::population_specific_hetmers(hetmers_pop12_minus1, hetmers_pop2.2);
+//        
+//        // output
+//        write_file(&(fst::convert_u64_to_string(&hetmer_union)), &"twopop".to_string(), "shared.csv");
+//        write_file(&(fst::convert_u64_to_string(&hetmer_pop1_specific)), &"twopop".to_string(), "pop1_specific.csv");
+//        write_file(&(fst::convert_u64_to_string(&hetmer_pop2_specific)), &"twopop".to_string(), "pop2_specific.csv");
+//        write_file(&(fst::convert_u64_to_string(&hetmers_pop12_minus12)), &"twopop".to_string(), "pop12_specific.csv");
+//    }
+   
    // analyses comparing two populations, or pairs of populations
    //let num_pops = args.inputs.len();
 
-   //if (num_pops == 2) && args.analyses.contains(&"fst".to_string()){
+   //if args.analyses.contains(&"fst".to_string()){
        //for i in 0..(num_pops-1){
        //    for j in (i+1)..num_pops{
                //println!("{:?}", &args.inputs[0]);
